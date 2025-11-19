@@ -612,88 +612,6 @@ class SWATSegLoader(Dataset):
                               index // self.step * self.win_size:index // self.step * self.win_size + self.win_size]), np.float32(
                 self.test_labels[index // self.step * self.win_size:index // self.step * self.win_size + self.win_size])
 
-import random
-
-class TimeSeriesAutoAugment:
-    def __init__(self, 
-                 num_ops=2,          # 每次选择几个增强
-                 magnitude=0.5,      # 基础强度
-                 prob=0.8,           # 每个增强的概率
-                 seed=None):
-        self.num_ops = num_ops
-        self.magnitude = magnitude
-        self.prob = prob
-        if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
-        self.available_ops = [
-            self.jitter, self.scaling, self.time_mask, self.permute,
-            self.time_warp, self.flip, self.magnitude_warp, self.cutmix
-        ]
-
-    def __call__(self, x):
-        ops = random.sample(self.available_ops, self.num_ops)
-        for op in ops:
-            if random.random() < self.prob:
-                x = op(x, self.magnitude)
-        return x
-
-    # ------------------- 定义增强函数 -------------------
-    def jitter(self, x, mag):
-        noise = np.random.normal(0, mag * 0.05, x.shape)
-        return x + noise
-
-    def scaling(self, x, mag):
-        factor = np.random.uniform(1 - mag, 1 + mag, (x.shape[-1],))
-        return x * factor
-
-    def time_mask(self, x, mag):
-        seq_len = x.shape[0]
-        mask_len = int(seq_len * mag * 0.2)
-        start = np.random.randint(0, seq_len - mask_len)
-        x[start:start + mask_len, :] = 0
-        return x
-
-    def permute(self, x, mag):
-        n_perm = max(1, int(5 * mag))
-        idx = np.arange(x.shape[0])
-        segs = np.array_split(idx, n_perm)
-        random.shuffle(segs)
-        return np.concatenate([x[s] for s in segs], axis=0)
-
-    def time_warp(self, x, mag):
-        from scipy.interpolate import CubicSpline
-        orig_steps = np.arange(x.shape[0])
-        random_warp = np.linspace(0, x.shape[0] - 1, x.shape[0])
-        random_warp += np.random.normal(0, mag * 2, random_warp.shape)
-        random_warp = np.clip(random_warp, 0, x.shape[0] - 1)
-        warped = np.zeros_like(x)
-        for dim in range(x.shape[1]):
-            cs = CubicSpline(orig_steps, x[:, dim])
-            warped[:, dim] = cs(np.sort(random_warp))
-        return warped
-
-    def flip(self, x, mag):
-        return -x if random.random() < 0.5 else x
-
-    def magnitude_warp(self, x, mag):
-        from scipy.interpolate import CubicSpline
-        seq_len = x.shape[0]
-        random_curve = np.random.normal(1.0, mag * 0.2, size=(4, x.shape[1]))
-        warp_steps = np.linspace(0, seq_len - 1, num=4)
-        cs = CubicSpline(warp_steps, random_curve, axis=0)
-        warp = cs(np.arange(seq_len))
-        return x * warp
-
-    def cutmix(self, x, mag):
-        lam = np.random.beta(1, 1)
-        if lam < 0.5: return x
-        idx = np.random.randint(0, x.shape[0])
-        cut_len = int(x.shape[0] * mag)
-        x2 = np.roll(x, idx, axis=0)
-        x[:cut_len] = lam * x[:cut_len] + (1 - lam) * x2[:cut_len]
-        return x
-
 
 class UEAloader(Dataset):
     """
@@ -811,9 +729,9 @@ class UEAloader(Dataset):
         if self.flag == "TRAIN" :
             # if self.root_path.count('EthanolConcentration') > 0 or self.root_path.count('PEMS-SF') > 0:
             augmenter = TimeSeriesAutoAugment(
-                num_ops=4, 
+                num_ops=2, 
                 magnitude=0.5, 
-                prob=0.6, 
+                prob=0.7, 
                 seed=self.args.seed
             )
             batch_x = augmenter(batch_x)
