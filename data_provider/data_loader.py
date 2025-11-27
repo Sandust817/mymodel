@@ -720,24 +720,31 @@ class UEAloader(Dataset):
         return df, labels_df
 
     def instance_norm(self, case):
+        # if self.root_path.count('EthanolConcentration') > 0:  # special process for numerical stability
+        #     mean = case.mean(0, keepdim=True)
+        #     case = case - mean
+        #     stdev = torch.sqrt(torch.var(case, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        #     case /= stdev
+        #     return case
+        # else:
         return case
 
     def __getitem__(self, ind):
-        batch_x = self.feature_df.loc[self.all_IDs[ind]].values
+        batch_x = self.feature_df.loc[self.all_IDs[ind]].values  # 单个样本：shape=(L, C)
         labels = self.labels_df.loc[self.all_IDs[ind]].values
+        
+        if self.flag == "TRAIN" and self.args.augmentation_ratio > 0:
+            L = batch_x.shape[0]  
+            C = batch_x.shape[1] 
 
-        if self.flag == "TRAIN" :
-            # if self.root_path.count('EthanolConcentration') > 0 or self.root_path.count('PEMS-SF') > 0:
-            augmenter = TimeSeriesAutoAugment(
-                num_ops=2, 
-                magnitude=0.5, 
-                prob=0.7, 
-                seed=self.args.seed
-            )
-            batch_x = augmenter(batch_x)
+            batch_x = batch_x.reshape((1, L, C)) 
+            
+            batch_x, labels, augmentation_tags = run_augmentation_single(batch_x, labels, self.args)
 
-        return torch.from_numpy(batch_x).float(), torch.from_numpy(labels).long()
+            batch_x = batch_x.reshape((L, C)) 
 
+        return self.instance_norm(torch.from_numpy(batch_x)), \
+            torch.from_numpy(labels)
 
     def __len__(self):
         return len(self.all_IDs)

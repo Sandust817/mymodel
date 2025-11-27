@@ -11,7 +11,7 @@ python -u run.py \
   --model TimePNP \
   --data UEA \
   --e_layers 3 \
-  --batch_size 64 \
+  --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \

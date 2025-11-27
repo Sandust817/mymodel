@@ -145,7 +145,7 @@ if __name__ == '__main__':
 
     # Augmentation
     parser.add_argument('--augmentation_ratio', type=int, default=0, help="How many times to augment")
-    parser.add_argument('--seed', type=int, default=2, help="Randomization seed")
+    parser.add_argument('--seed', type=int, default=2025, help="Randomization seed")
     parser.add_argument('--jitter', default=False, action="store_true", help="Jitter preset augmentation")
     parser.add_argument('--scaling', default=False, action="store_true", help="Scaling preset augmentation")
     parser.add_argument('--permutation', default=False, action="store_true",
@@ -166,13 +166,14 @@ if __name__ == '__main__':
     parser.add_argument('--discsdtw', default=False, action="store_true",
                         help="Discrimitive shapeDTW warp preset augmentation")
     parser.add_argument('--extra_tag', type=str, default="", help="Anything extra")
-    parser.add_argument('--set_K', type=int, default=5, help="K")
+    parser.add_argument('--K', type=int, default=5, help="K")
+    parser.add_argument('--warm_up', type=int, default=3)
 
     # TimeXer
     parser.add_argument('--patch_len', type=int, default=16, help='patch length')
 
     args = parser.parse_args()
-    seed_worker, generator = set_seed(fix_seed)
+    seed_worker, generator = set_seed(args.seed)
     args.seed_worker=seed_worker
     args.generator=generator
     if torch.cuda.is_available() and args.use_gpu:

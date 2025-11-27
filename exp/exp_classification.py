@@ -14,6 +14,85 @@ import datetime
 import torch.nn.functional as F
 warnings.filterwarnings('ignore')
 # 类内原型多样性正则化
+import torch
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.metrics.pairwise import cosine_similarity
+import seaborn as sns
+import numpy as np
+import os
+
+@torch.no_grad()
+def visualize_prototypes(model, setting, class_names=None):
+    """
+    可视化每个原型在2D空间的分布，并计算原型间相似度百分比，结果保存到文件夹
+    Args:
+        model: 包含 model.prototypes 的模型
+        save_dir: 保存图片和结果的文件夹
+        class_names: 可选，每个类别名字 list
+        topk_similar: 输出每个原型最相似的 topk 原型
+    """
+    save_dir = os.path.join("checkpoints", setting)
+    os.makedirs(save_dir, exist_ok=True)
+    topk_similar=model.k
+
+    prototypes = model.prototypes.data.cpu()  # [K, D]
+    num_prototypes, D = prototypes.shape
+    k = model.k
+    num_class = model.num_class
+
+    # 1️⃣ 降维到2D
+    pca = PCA(n_components=2)
+    proto_2d = pca.fit_transform(prototypes.numpy())  # [K, 2]
+
+    # 2️⃣ 可视化散点图
+    plt.figure(figsize=(10, 8))
+    colors = sns.color_palette("tab10", num_class)
+    for c in range(num_class):
+        idx_start = c * k
+        idx_end = idx_start + k
+        plt.scatter(proto_2d[idx_start:idx_end, 0], proto_2d[idx_start:idx_end, 1], 
+                    label=class_names[c] if class_names else f"Class {c}", color=colors[c % 10])
+        # 每个原型编号
+        for i in range(idx_start, idx_end):
+            plt.text(proto_2d[i, 0], proto_2d[i, 1], str(i%k), fontsize=9)
+    plt.title("Prototype Feature Distribution (PCA 2D)")
+    plt.xlabel("PC1")
+    plt.ylabel("PC2")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, "prototype_distribution.png"))
+    plt.close()
+
+    # 3️⃣ 计算原型之间余弦相似度
+    sim_matrix = cosine_similarity(prototypes.numpy())  # [K, K]
+    sim_percent = ((sim_matrix + 1) / 2) * 100  # 转换为百分比 [0,100]
+
+    # 保存相似度矩阵
+    np.savetxt(os.path.join(save_dir, "prototype_similarity_percent.csv"), sim_percent, delimiter=",", fmt="%.2f")
+
+    # 4️⃣ 可视化相似度热力图
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(sim_percent, annot=False, cmap="coolwarm", vmin=0, vmax=100)
+    plt.title("Prototype Cosine Similarity (%)")
+    plt.xlabel("Prototype Index")
+    plt.ylabel("Prototype Index")
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, "prototype_similarity_heatmap.png"))
+    plt.close()
+
+    # 5️⃣ 输出每个原型最相似的 topk 原型到文件
+    topk_file = os.path.join(save_dir, "prototype_topk_similarity.txt")
+    with open(topk_file, "w") as f:
+        for i in range(num_prototypes):
+            sim_i = sim_percent[i].copy()
+            sim_i[i] = -1  # 排除自己
+            topk_idx = sim_i.argsort()[-topk_similar:][::-1]
+            topk_val = sim_i[topk_idx]
+            line = f"Prototype {i} most similar: {list(zip(topk_idx, topk_val.round(2)))}\n"
+            f.write(line)
+
+    print(f"✅ Prototype visualization and similarity saved to '{save_dir}'")
 
 
 class FocalLoss(nn.Module):
@@ -106,6 +185,43 @@ class Exp_Classification(Exp_Basic):
         alpha = None 
         # criterion = FocalLoss(gamma=2.0, alpha=alpha, reduction='mean')
         return criterion
+    
+    @torch.no_grad()
+    def warmup_prototypes(self, train_loader, epochs=3, momentum=0.99):
+
+        print(f"\n🔹 Starting Prototype Warm-up ({epochs} epochs, momentum={momentum})")
+        self.model.eval()  # 不训练主网络
+        device = self.device
+
+        # 暂存原型
+        
+        
+        for epoch in range(epochs):
+            for batch_x, labels, _ in train_loader:
+                prototypes = self.model.prototypes.data.clone().to(device)
+                batch_x = batch_x.float().to(device)
+                labels = labels.long().squeeze(-1).to(device)
+
+                # 1️⃣ 通过 model 提取特征（复用 model 的 feature_extractor + backbone）
+                features = self.model.feature_extractor(batch_x.transpose(1, 2))
+                features = self.model.backbone(features, prototypes)
+                features = F.normalize(features, p=2, dim=-1)
+
+                # 2️⃣ 调用 model 内置的 _update_prototypes 更新原型
+                # 注意这里用 momentum 替代 self.gamma 临时 warm-up
+                old_gamma = self.model.gamma
+                self.model.gamma = momentum
+                self.model._update_prototypes(features, labels,0)
+                self.model.gamma = old_gamma
+
+            print(f"Warm-up epoch [{epoch+1}/{epochs}] done.")
+
+        # # 3️⃣ 写回最终原型
+        # prototypes = F.normalize(self.model.prototypes.data, p=2, dim=-1)
+        # self.model.prototypes.data.copy_(prototypes)
+
+
+
 
     def vali(self, vali_data, vali_loader, criterion):
         total_loss = []
@@ -139,8 +255,8 @@ class Exp_Classification(Exp_Basic):
 
 
 
-    def train(self, setting):
-        prototype_warmup_epochs=3
+    def train(self, setting,pov=1):
+        prototype_warmup_epochs=self.args.warm_up
         train_data, train_loader = self._get_data(flag='TRAIN')
         vali_data, vali_loader = self._get_data(flag='TEST')
         test_data, test_loader = self._get_data(flag='TEST')
@@ -166,6 +282,8 @@ class Exp_Classification(Exp_Basic):
         # )  # 验证损失5个epoch不下降则衰减50%
 
         criterion = self._select_criterion()
+        # if getattr(self.args, "TimePNP", True):
+        #     self.warmup_prototypes(train_loader, epochs=prototype_warmup_epochs, momentum=0.95)
 
         for epoch in range(self.args.train_epochs):
             # -------------------------- 2. 每个epoch开始时记录当前学习率 --------------------------
@@ -186,7 +304,7 @@ class Exp_Classification(Exp_Basic):
                 batch_x = batch_x.float().to(self.device)
                 padding_mask = padding_mask.float().to(self.device)
                 label = label.to(self.device)
-                outputs = self.model(batch_x, padding_mask, label, None)
+                outputs = self.model(batch_x, padding_mask, label,epoch)
                 loss = criterion(outputs, label.long().squeeze(-1))
                 if self.args.model=='TimePNP':
                     loss+=self.model.diversity_loss()*0.1
@@ -230,6 +348,7 @@ class Exp_Classification(Exp_Basic):
 
         best_model_path = path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
+        visualize_prototypes(self.model,setting)
 
         return self.model
 

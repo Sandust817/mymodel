@@ -10,7 +10,7 @@ python -u run.py \
   --model TimePNP \
   --data UEA \
   --e_layers 3 \
-  --batch_size 64 \
+  --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
@@ -36,7 +36,7 @@ python -u run.py \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
+  --learning_rate 0.0005 \
   --train_epochs 200 \
   --patience 20
 
@@ -55,7 +55,7 @@ python -u run.py \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
+  --learning_rate 0.002 \
   --train_epochs 200 \
   --patience 20
 
@@ -131,7 +131,7 @@ python -u run.py \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
+  --learning_rate 0.0005 \
   --train_epochs 200 \
   --patience 20
 
@@ -150,7 +150,7 @@ python -u run.py \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
+  --learning_rate 0.0001 \
   --train_epochs 200 \
   --patience 20
 
@@ -169,7 +169,7 @@ python -u run.py \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
+  --learning_rate 0.0002 \
   --train_epochs 200 \
   --patience 20
 

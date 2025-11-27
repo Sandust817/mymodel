@@ -402,24 +402,73 @@ class Model(nn.Module):
         return class_logits
 
     @torch.no_grad()
-    def _update_prototypes(self, features: torch.Tensor, labels: torch.Tensor):
+    def _update_prototypes(self, features, labels,
+                                alpha=0.5,              # sinkhorn 比例
+                                sinkhorn_iters=3,
+                                sinkhorn_eps=0.05,
+                                eps=1e-6):
+        """
+        Hybrid update specifically designed for ScoreAggregation-based classification.
+
+        Ensures:
+        - class center is preserved
+        - inside the class, prototypes get diversity (sinkhorn)
+        - EMA for stability
+        - final prototypes remain normalized
+        """
         device = features.device
-        labels = labels.to(device)
         B, D = features.shape
-        k = self.k
-        one_hot = F.one_hot(labels, num_classes=self.num_class).float()  # [B, C]
-        rep = repeat(one_hot, 'b c -> b (c k)', k=k)  # [B, K]
-        numerator = rep.t() @ features  # [K, D]
-        counts = rep.sum(dim=0)         # [K]
-        mask = counts > 0
-        counts_masked = counts[mask].unsqueeze(1)  # [k_pos,1]
-        new_protos = torch.zeros_like(self.prototypes, device=device)  # [K, D]
-        new_protos[mask] = numerator[mask] / counts_masked
-        # EMA update only for masked positions:
-        old = self.prototypes.data.clone()
-        updated = old
-        updated[mask] = self.gamma * old[mask] + (1.0 - self.gamma) * new_protos[mask]
-        self.prototypes.data = F.normalize(updated, p=2, dim=-1)
+        C = self.num_class
+        K = self.k
+
+        prot = self.prototypes.data
+
+        feats_norm = F.normalize(features, dim=-1)
+        prot_norm = F.normalize(prot, dim=-1)
+
+        def sinkhorn(Q):
+            Q = torch.exp(Q / sinkhorn_eps)
+            Q /= Q.sum()
+            for _ in range(sinkhorn_iters):
+                Q = Q / (Q.sum(dim=1, keepdim=True) + eps)
+                Q = Q / (Q.sum(dim=0, keepdim=True) + eps)
+            return Q
+
+        new_proto_all = prot_norm.clone()
+
+        for c in range(C):
+            idx = (labels == c).nonzero(as_tuple=True)[0]
+            if idx.numel() == 0:
+                continue
+
+            f_c = feats_norm[idx]              # [Nc, D]
+            p_c = prot_norm[c*K:(c+1)*K]       # [K, D]
+
+            # class center
+            class_center = f_c.mean(0, keepdim=True)  # [1, D]
+
+            # -- supervised target
+            supervised_target = class_center.repeat(K, 1)  # [K, D]
+
+            # -- sinkhorn assignment
+            logits = f_c @ p_c.t()                    # [Nc, K]
+            Q = sinkhorn(logits)
+            numerator = Q.t() @ f_c                   # [K, D]
+            denom = Q.sum(0).unsqueeze(1) + eps
+            sinkhorn_target = numerator / denom       # [K, D]
+
+            # -- hybrid target
+            target = (1 - alpha) * supervised_target + alpha * sinkhorn_target
+
+            # -- EMA update
+            old = prot[c*K:(c+1)*K]
+            updated = self.gamma * old + (1 - self.gamma) * target
+
+            # -- normalize
+            new_proto_all[c*K:(c+1)*K] = F.normalize(updated, dim=-1)
+
+        self.prototypes.data.copy_(new_proto_all)
+
 
     def diversity_loss(self):
         """计算类内原型多样性损失（鼓励同类原型彼此不同）"""
