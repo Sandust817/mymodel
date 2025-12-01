@@ -87,15 +87,6 @@ class ScoreAggregation(nn.Module):
         
         return class_logits
     
-def diversity_loss(self):
-    loss = 0
-    for c in range(self.num_class):
-        start = c * self.k
-        end = start + self.k
-        proto_class = self.prototypes[start:end]  # [k, D]
-        sim = torch.mm(proto_class, proto_class.t())  # [k, k]
-        loss += (sim - torch.eye(self.k, device=sim.device)).pow(2).mean()
-    return loss
 # ----------------------------
 # FFT Frequency Weighting Module
 # ----------------------------

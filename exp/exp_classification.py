@@ -238,7 +238,7 @@ class Exp_Classification(Exp_Basic):
         # -------------------------- 1. 添加学习率衰减器 --------------------------
         # 选择1：StepLR（固定epoch间隔衰减，常用）
         # 参数说明：step_size=10（每10个epoch衰减一次），gamma=0.5（每次衰减为原来的50%）
-        scheduler = optim.lr_scheduler.StepLR(model_optim, step_size=self.args.patience, gamma=0.5)
+        scheduler = optim.lr_scheduler.StepLR(model_optim, step_size=self.args.patience//2, gamma=0.5)
         criterion = self._select_criterion()
         # if getattr(self.args, "TimePNP", True):
         #     self.warmup_prototypes(train_loader, epochs=prototype_warmup_epochs, momentum=0.95)

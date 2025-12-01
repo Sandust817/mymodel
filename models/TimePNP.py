@@ -8,127 +8,227 @@ import math
 
 from layers.mona import MonaFeatureExtractor
 
-
-# ------------------------------------------------
-# Prototype Cross-Attention
-# ------------------------------------------------
+    
 class PrototypeCrossAttention(nn.Module):
+    """
+    Prototype Cross-Attention with Transformer-style residual connection and LayerNorm.
+    Structure: x + Dropout(Attention(LayerNorm(x), prototypes))
+    """
     def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.2):
         super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        
+        # LayerNorm before attention (like norm_first=True in Transformer)
         self.norm = nn.LayerNorm(embed_dim)
+        
+        # Multihead cross-attention: queries from x, keys/values from prototypes
         self.cross_attn = nn.MultiheadAttention(
             embed_dim=embed_dim,
             num_heads=num_heads,
             dropout=dropout,
             batch_first=True
         )
+        
+        # Dropout for residual connection
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x: Tensor, prototypes: Tensor) -> Tensor:
-        residual = x.clone()
-        x_norm = self.norm(x)
-        proto = prototypes.unsqueeze(0).expand(x.size(0), -1, -1)
-        attn_output, _ = self.cross_attn(x_norm, proto, proto)
-        attn_output = self.norm(attn_output)
-        return residual + self.dropout(attn_output)
+    def forward(self, x: torch.Tensor, prototypes: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: [B, L, D] - input sequence (e.g., transformer output)
+            prototypes: [K, D] - prototype matrix (normalized)
+        Returns:
+            x_out: [B, L, D] - residual output
+        """
+        # Save original x for residual connection
+        residual = x
+        
+        # LayerNorm -> Cross-Attention -> Dropout -> Residual
+        # x_norm = self.norm(x)  # [B, L, D]
+        prototypes_batch = prototypes.unsqueeze(0).expand(x.size(0), -1, -1)  # [B, K, D]
+        x=self.norm(x)
+        prototypes_batch=self.norm(prototypes_batch)
+        # Cross-attention: x queries attend to prototypes
+        attn_output, _ = self.cross_attn(
+            query=x,
+            key=prototypes_batch,
+            value=prototypes_batch
+        )  # [B, L, D]
+        attn_output=self.norm(attn_output)
+        # Residual connection
+        x_out = residual + attn_output
+        return x_out
 
-
-# ------------------------------------------------
-# Prototype Score Aggregation
-# ------------------------------------------------
 class ScoreAggregation(nn.Module):
-    def __init__(self, n_prototypes_total: int, num_classes: int, init_val: float = 0.2, temperature: float = 0.1):
+
+    def __init__(self, n_prototypes_total: int,num_classes: int,  init_val: float = 0.2, temperature: float = 0.1):
         super().__init__()
-        assert n_prototypes_total % num_classes == 0
-        self.k = n_prototypes_total // num_classes
+        # 核心：计算每个类别对应的原型数量（确保 n_prototypes_total 是 num_classes 的整数倍）
+        assert n_prototypes_total % num_classes == 0, "原型总数必须是类别数的整数倍"
+        self.k = n_prototypes_total // num_classes  # 每个类别对应 k 个原型
+        
+        # 可学习权重：[num_classes, k]，每个类别下的 k 个原型各有一个权重
+        self.weights = nn.Parameter(
+            torch.full((num_classes, self.k), init_val, dtype=torch.float32)
+        )
+        self.temperature = temperature  # 权重归一化的温度系数，控制权重差异度
 
-        init_weights = torch.zeros(num_classes, self.k)
-        init_weights[:, 0] = 2.0
-        init_weights[:, 1:] = -2.0
-        self.weights = nn.Parameter(init_weights)
-        self.temperature = temperature
+    def forward(self, prototype_logits: torch.Tensor) -> torch.Tensor:
 
-    def forward(self, prototype_logits: Tensor) -> Tensor:
-        B = prototype_logits.size(0)
-        num_classes = self.weights.size(0)
+        num_classes = self.weights.shape[0]
+        B, _ = prototype_logits.shape
+        
 
-        grouped = prototype_logits.reshape(B, num_classes, self.k)
-        w = F.softmax(self.weights / self.temperature, dim=-1) * self.k
-        return (grouped * w).sum(dim=-1)
+        prototype_logits_grouped = prototype_logits.reshape(B, num_classes, self.k)
 
+        normalized_weights = F.softmax(self.weights / self.temperature, dim=-1) * self.k
 
-# ------------------------------------------------
-# FFT Frequency Weighting
-# ------------------------------------------------
+        class_logits = (prototype_logits_grouped * normalized_weights).sum(dim=-1)
+        
+        return class_logits
+    
+def diversity_loss(self):
+    loss = 0
+    for c in range(self.num_class):
+        start = c * self.k
+        end = start + self.k
+        proto_class = self.prototypes[start:end]  # [k, D]
+        sim = torch.mm(proto_class, proto_class.t())  # [k, k]
+        loss += (sim - torch.eye(self.k, device=sim.device)).pow(2).mean()
+    return loss
+# ----------------------------
+# FFT Frequency Weighting Module
+# ----------------------------
 class FFTFrequencyWeight(nn.Module):
+    """
+    Apply learnable or fixed weights in frequency domain.
+    """
     def __init__(self, seq_len: int, weight_type: str = "learnable"):
         super().__init__()
         self.seq_len = seq_len
         self.weight_type = weight_type
 
         if weight_type == "learnable":
+            # Learnable weight for each frequency bin
             self.weight = nn.Parameter(torch.ones(seq_len // 2 + 1))
         elif weight_type == "lowpass":
             freqs = torch.arange(seq_len // 2 + 1) / (seq_len // 2 + 1)
             self.register_buffer("weight", 1.0 / (1.0 + 10 * freqs))
         elif weight_type == "highpass":
+            # Fixed high-pass filter
             freqs = torch.arange(seq_len // 2 + 1) / (seq_len // 2 + 1)
             self.register_buffer("weight", freqs)
-        else:
+        else:  # "none"
             self.register_buffer("weight", torch.ones(seq_len // 2 + 1))
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: [B, C, L]
+        returns: [B, C, L] with frequency-weighted signal
+        """
         B, C, L = x.shape
-        x_fft = torch.fft.rfft(x, dim=-1)
+        assert L == self.seq_len, f"Expected seq_len={self.seq_len}, got {L}"
 
-        weight = F.softplus(self.weight) if self.weight_type == "learnable" else self.weight
-        x_fft = x_fft * weight.unsqueeze(0).unsqueeze(0)
+        # FFT
+        x_fft = torch.fft.rfft(x, dim=-1)  # [B, C, L//2 + 1]
 
-        return torch.fft.irfft(x_fft, n=L, dim=-1)
+        # Apply weight
+        if self.weight_type == "learnable":
+            weight = F.softplus(self.weight)  # Ensure positive
+        else:
+            weight = self.weight
+
+        x_fft_weighted = x_fft * weight.unsqueeze(0).unsqueeze(0)  # [B, C, L//2+1]
+
+        # IFFT
+        x_weighted = torch.fft.irfft(x_fft_weighted, n=L, dim=-1)  # [B, C, L]
+        return x_weighted
 
 
-# ------------------------------------------------
-# Patch Embedding
-# ------------------------------------------------
 class ViTPatchEmbedding(nn.Module):
+    """
+    Standard ViT-style Patch Embedding for 1D sequences.
+    Input:  [B, C, L]
+    Output: [B, n_patches, embed_dim]
+    """
     def __init__(self, seq_len: int, patch_size: int, in_channels: int, embed_dim: int):
         super().__init__()
+        self.seq_len = seq_len
         self.patch_size = patch_size
-        self.proj = nn.Conv1d(in_channels, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.embed_dim = embed_dim
+        self.in_channels = in_channels
+
+        # Conv1d acts as patchify + linear projection
+        self.proj = nn.Conv1d(
+            in_channels=in_channels,
+            out_channels=embed_dim,
+            kernel_size=patch_size,
+            stride=patch_size
+        )
+
+        # compute number of patches after padding
         self.n_patches = math.ceil(seq_len / patch_size)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: [B, C, L]
+        returns: [B, n_patches, embed_dim]
+        """
         B, C, L = x.shape
         pad_len = (self.patch_size - L % self.patch_size) % self.patch_size
         if pad_len > 0:
-            x = F.pad(x, (0, pad_len))
-        x = self.proj(x)
-        return x.transpose(1, 2)
-
+            x = F.pad(x, (0, pad_len), mode='constant', value=0)
+        x = self.proj(x)               # [B, embed_dim, n_patches]
+        x = x.transpose(1, 2)          # [B, n_patches, embed_dim]
+        return x
 
 class PatchEmbedding(nn.Module):
     def __init__(self, patch_size: int, embed_dim: int):
+        """
+        Channel-independent patching with padding support.
+        Input:  [B, C, L]  (L can be any positive integer)
+        Output: [B*C, n_patches, embed_dim]
+        """
         super().__init__()
         self.patch_size = patch_size
         self.proj = nn.Linear(patch_size, embed_dim)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: [B, C, L]
+        returns: [B*C, n_patches, embed_dim]
+        """
         B, C, L = x.shape
-        if L % self.patch_size != 0:
-            x = F.pad(x, (0, self.patch_size - L % self.patch_size))
-            L = x.size(-1)
+        patch_size = self.patch_size
 
-        n_patches = L // self.patch_size
-        x = x.view(B, C, n_patches, self.patch_size)
-        x = x.view(B * C, n_patches, self.patch_size)
-        return self.proj(x)
+        # Compute required padding
+        if L % patch_size != 0:
+            pad_len = patch_size - (L % patch_size)
+            # Pad on the right (temporal dimension)
+            x = F.pad(x, (0, pad_len), mode='constant', value=0)  # [B, C, L + pad_len]
+            new_L = L + pad_len
+        else:
+            new_L = L
+
+        n_patches = new_L // patch_size
+
+        # Reshape to [B, C, n_patches, patch_size]
+        x = x.view(B, C, n_patches, patch_size)
+
+        # Flatten batch and channel: [B*C, n_patches, patch_size]
+        x = x.view(B * C, n_patches, patch_size)
+
+        # Project each patch to embedding
+        x = self.proj(x)  # [B*C, n_patches, embed_dim]
+        return x
 
 
-# ------------------------------------------------
-# Transformer Backbone
-# ------------------------------------------------
+# ----------------------------
+# Transformer Backbone with Channel-Independent Patching
+# ----------------------------
 class TransformerBackbone(nn.Module):
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], prototypes: Optional[nn.Parameter] = None):
         super().__init__()
         self.enc_in = config.d_model
         self.seq_len = config.seq_len
@@ -140,28 +240,42 @@ class TransformerBackbone(nn.Module):
         self.use_patch = getattr(config, "use_patch", 0)
         self.patch_size = getattr(config, "patch_size", 16)
 
+        # FFT frequency weighting
         self.use_fft_weight = getattr(config, "use_fft_weight", True)
+        self.fft_weight_type = getattr(config, "fft_weight_type", "learnable")
         if self.use_fft_weight:
-            self.fft_weight = FFTFrequencyWeight(self.seq_len, getattr(config, "fft_weight_type", "learnable"))
+            self.fft_weight = FFTFrequencyWeight(self.seq_len, self.fft_weight_type)
 
+        # Patching
         if self.use_patch == 1:
-            self.patch_embed = PatchEmbedding(self.patch_size, self.embed_dim)
-            seq_len = (self.seq_len + self.patch_size - 1) // self.patch_size
+            self.patch_embed = PatchEmbedding(patch_size=self.patch_size, embed_dim=self.embed_dim)
+            transformer_seq_len = (self.seq_len + self.patch_size - 1) // self.patch_size
         elif self.use_patch == 2:
-            self.patch_embed = ViTPatchEmbedding(self.seq_len, self.patch_size, self.enc_in, self.embed_dim)
-            seq_len = self.patch_embed.n_patches
+            self.patch_embed = ViTPatchEmbedding(
+                seq_len=self.seq_len,
+                patch_size=self.patch_size,
+                in_channels=self.enc_in,
+                embed_dim=self.embed_dim,
+            )
+            transformer_seq_len = self.patch_embed.n_patches
         else:
             self.input_proj = nn.Linear(self.enc_in, self.embed_dim)
-            seq_len = self.seq_len
+            transformer_seq_len = self.seq_len
 
-        self.pos_encoding = nn.Parameter(torch.zeros(1, seq_len, self.embed_dim))
-        nn.init.normal_(self.pos_encoding, std=0.02)
+        # Positional encoding
+        self.use_pos_encoding = True
+        if self.use_pos_encoding:
+            self.pos_encoding = nn.Parameter(torch.zeros(1, transformer_seq_len, self.embed_dim))
+            nn.init.normal_(self.pos_encoding, std=0.02)
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
-        self.selu=nn.SELU()
-        nn.init.normal_(self.cls_token, std=0.02)
-        seq_len += 1
+        # [CLS] token
+        self.use_cls_token = True
+        if self.use_cls_token:
+            self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
+            nn.init.normal_(self.cls_token, std=0.02)
+            transformer_seq_len += 1
 
+        # Transformer encoder
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.embed_dim,
             nhead=self.num_heads,
@@ -171,120 +285,198 @@ class TransformerBackbone(nn.Module):
             norm_first=True,
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=self.num_layers)
-
-        self.proto_attn = PrototypeCrossAttention(self.embed_dim, self.num_heads)
         self.norm = nn.LayerNorm(self.embed_dim)
 
-    def forward(self, x: Tensor, prototypes: Tensor) -> Tensor:
+        # ✅ Cross attention to prototypes
+        self.proto_attn = PrototypeCrossAttention(embed_dim=self.embed_dim, num_heads=self.num_heads)
+
+        self._init_weights()
+
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.trunc_normal_(m.weight, std=0.02)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
+    def forward(self, x: torch.Tensor, prototypes: torch.Tensor) -> torch.Tensor:
+        B, C, L = x.shape
         if self.use_fft_weight:
             x = self.fft_weight(x)
 
+        # Patching
         if self.use_patch != 0:
             x = self.patch_embed(x)
         else:
-            x = self.input_proj(x.transpose(1, 2))
+            x = x.transpose(1, 2)
+            x = self.input_proj(x)
 
-        x = x + self.pos_encoding
-        cls = repeat(self.cls_token, "1 1 d -> b 1 d", b=x.size(0))
-        x = torch.cat([cls, x], dim=1)
+        if self.use_pos_encoding:
+            x = x + self.pos_encoding
 
-        for i, layer in enumerate(self.transformer.layers):
-            x = layer(x)
-        x1=self.norm(x)
-        for i in range(self.num_layers//2+1):
-            x = self.proto_attn(x, prototypes)
-        # x=x+self.selu(x1)
-        cls_final = x[:, 0]
+        if self.use_cls_token:
+            cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=x.shape[0])
+            x = torch.cat([cls_tokens, x], dim=1)
+
+        # Transformer encoder
+        x = self.transformer(x)
+        x = self.norm(x)
+
+        # # ✅ Cross-attention with prototypes
+        x = self.proto_attn(x, prototypes)
+
+        # Extract CLS and aggregate
+        cls_tokens = x[:, 0]
+        if self.use_patch == 1:
+            cls_tokens = cls_tokens.view(B, C, self.embed_dim)
+            cls_final = cls_tokens.mean(dim=1)
+        else:
+            cls_final = cls_tokens
+
         return cls_final
 
-
-# ------------------------------------------------
-# Main Model
-# ------------------------------------------------
 class Model(nn.Module):
     def __init__(self, config):
         super().__init__()
-
         self.enc_in = config.enc_in
         self.seq_len = config.seq_len
         self.num_class = config.num_class
         self.embed_dim = config.d_model
         self.temperature = getattr(config, "temperature", 0.2)
-        self.gamma = getattr(config, "gamma", 0.95)
+        self.gamma = getattr(config, "gamma", 0.99)
         self.k = getattr(config, "k", 5)
+        self.n_prototypes_total = min(self.k * self.num_class, 200) 
+        self.feature_extractor=MonaFeatureExtractor(self.enc_in,self.embed_dim)
 
-        self.n_prototypes_total = min(self.k * self.num_class, 200)
 
-        self.feature_extractor = MonaFeatureExtractor(self.enc_in, self.embed_dim)
+        # New: Scalable loss config
         self.use_scalenorm = getattr(config, "use_scalenorm", False)
+        self.scalable_alpha = getattr(config, "scalable_alpha", 1.0)
+        self.scalable_gamma = getattr(config, "scalable_gamma", 2.0)
 
-        self.backbone = TransformerBackbone(config)
+        # Backbone
+        self.backbone =TransformerBackbone(config)
 
+        # Prototypes
         self.prototypes = nn.Parameter(torch.randn(self.n_prototypes_total, self.embed_dim))
         nn.init.trunc_normal_(self.prototypes, std=0.02)
+        self.relu=nn.ReLU()
 
-        self.classifier = ScoreAggregation(self.n_prototypes_total, self.num_class)
         self.optimizing_prototypes = True
-        self.dT = 1
+        self.classifier=ScoreAggregation(self.n_prototypes_total,self.num_class)
 
-    def forward(self, x: Tensor, _a=None, labels: Optional[Tensor] = None, _b=None, return_sim_maps: bool = False):
+    def forward(
+        self,
+        x: torch.Tensor,
+        _a=None,
+        labels: Optional[torch.Tensor] = None,
+        _b=None,
+        return_sim_maps: bool = False,
+    ):
+        #input=[B,L,C]
         x1 = self.feature_extractor(x.transpose(1, 2))
         x = x1.transpose(1, 2)
 
+        observed_mask = torch.ones_like(x)  # 假设所有数据有效（实际场景可传入真实掩码）
+
+        # Step 2: （可选）ScaleNorm归一化
         if self.use_scalenorm:
-            scaled_x, _, _ = self.scaler(x, torch.ones_like(x))
+            scaled_x, _, _ = self.scaler(x, observed_mask)
         else:
-            scaled_x = x
-
+            scaled_x = x  # 不归一化，直接使用原始数据
+            
         if scaled_x.shape[1] != self.backbone.enc_in:
-            x = scaled_x.transpose(1, 2)
-
-        features = self.backbone(x, self.prototypes)
+            x = scaled_x.transpose(1, 2)  # to [B, C, L]
+        
+        features = self.backbone(x,self.prototypes)  # [B, D]
         features = F.normalize(features, p=2, dim=-1)
-        prot_norm = F.normalize(self.prototypes, p=2, dim=-1)
+        prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
 
-        logits = torch.mm(features, prot_norm.t())
+        logits = torch.mm(features, prototypes_norm.t())  # [B, K]
 
         if self.training and self.optimizing_prototypes:
             self._update_prototypes(features)
-
-        return self.classifier(logits)
+        class_logits = self.classifier(logits)  # [B, num_class]
+        return class_logits
 
     @torch.no_grad()
-    def _update_prototypes(self, feats, sinkhorn_iters=5, temperature=0.13, eps=1e-6):
-        prot_old = F.normalize(self.prototypes.data, dim=-1)
+    def _update_prototypes(self, features: Tensor, debug_freq: int = 30):
+        """
+        Soft assignment-based unsupervised prototype update in normalized space.
+        - No labels needed
+        - Soft assignment via temperature-scaled softmax
+        - EMA update with normalization
+        - Debug info for monitoring
+        """
+        if not hasattr(self, '_update_count'):
+            self._update_count = 0
+        self._update_count += 1
 
-        logits = feats @ prot_old.t()
-        grouped = logits.view(-1, self.num_class, self.k)
-        Q = F.softmax(grouped / 0.05, dim=-1).view(-1, self.num_class * self.k)
-        Q = Q / (Q.sum(dim=1, keepdim=True) + eps)
+        B, D = features.shape
+        K = self.n_prototypes_total
 
-        for _ in range(sinkhorn_iters):
-            Q = Q / (Q.sum(dim=1, keepdim=True) + eps)
+        # Ensure features and prototypes are normalized
+        feats_norm = F.normalize(features, dim=-1)  # [B, D]
+        prot_norm = F.normalize(self.prototypes.data, dim=-1)  # [K, D]
 
-        mass = Q.sum(0).unsqueeze(1) + eps
-        proto_new = (Q.T @ feats) / mass
+        # Compute cosine similarities
+        sim = torch.mm(feats_norm, prot_norm.t())  # [B, K]
 
-        if self.dT % 100 == 0:
-            print(Q.mean(0))
-        self.dT += 1
+        # 🔑 Soft assignment with temperature
+        temperature = 0.05  # Lower = harder assignment; 0.05~0.1 is typical
+        Q = F.softmax(sim / temperature, dim=1)  # [B, K], rows sum to 1
 
-        updated = self.gamma * prot_old + (1 - self.gamma) * proto_new
+        # Update each prototype as weighted average of features
+        new_protos = torch.mm(Q.t(), feats_norm)  # [K, D]
+        new_protos = F.normalize(new_protos, dim=-1)  # Keep on unit sphere
 
-        for i in range(updated.size(0)):
-            for j in range(i):
-                proj = (updated[i] @ updated[j]) * updated[j]
-                updated[i] -= proj
-
+        # EMA update
+        old_protos = self.prototypes.data  # [K, D]
+        updated = self.gamma * old_protos + (1 - self.gamma) * new_protos
         updated = F.normalize(updated, dim=-1)
         self.prototypes.data.copy_(updated)
 
+        # === Debug Info (every `debug_freq` steps) ===
+        if self._update_count % debug_freq == 0:
+            # Assignment statistics
+            assignment_counts = Q.sum(dim=0)  # [K], expected #samples per prototype
+            probs = assignment_counts / assignment_counts.sum()
+            entropy = -(probs * (probs + 1e-8).log()).sum().item()
+
+            # Similarity stats
+            avg_sim = sim.mean().item()
+            max_sim_per_sample = sim.max(dim=1).values  # [B]
+            avg_max_sim = max_sim_per_sample.mean().item()
+            min_max_sim = max_sim_per_sample.min().item()
+
+            # Detect near-dead prototypes (assigned < 0.1 sample on average)
+            near_dead = (assignment_counts < 0.1).sum().item()
+
+            print(f"\n[Prototype Debug] Step {self._update_count}")
+            print(f"  - Batch size: {B}, #Prototypes: {K}")
+            print(f"  - Assignment count → min: {assignment_counts.min().item():.2f}, "
+                f"max: {assignment_counts.max().item():.2f}, mean: {assignment_counts.mean().item():.2f}")
+            print(f"  - Assignment entropy: {entropy:.4f} (max={math.log(K):.4f})")
+            print(f"  - Avg similarity (all pairs): {avg_sim:.4f}")
+            print(f"  - Avg max-sim per sample: {avg_max_sim:.4f} (min={min_max_sim:.4f})")
+            if near_dead > 0:
+                print(f"  ⚠️  {near_dead}/{K} prototypes nearly dead (assignment < 0.1)!")
+            else:
+                print(f"  ✅ All prototypes active.")
+            print(f"  - Prototype norms: mean={torch.norm(self.prototypes.data, dim=-1).mean().item():.4f}")
+
+
+
     def diversity_loss(self):
+        """计算类内原型多样性损失（鼓励同类原型彼此不同）"""
         loss = 0.0
         for c in range(self.num_class):
             start = c * self.k
             end = start + self.k
-            proto = self.prototypes[start:end]
-            sim = F.cosine_similarity(proto.unsqueeze(1), proto.unsqueeze(0), dim=-1)
-            loss += (sim - torch.eye(self.k, device=sim.device)).pow(2).mean()
-        return loss
+            proto_class = self.prototypes[start:end]  # [k, D]
+            # 计算余弦相似度矩阵 [k, k]
+            sim = torch.mm(proto_class, proto_class.t())  # 已归一化，即余弦相似度
+            # 目标：非对角线元素趋近于0，对角线为1
+            target = torch.eye(self.k, device=sim.device)
+            loss += F.mse_loss(sim, target)
+        return loss / self.num_class  # 平均每类损失

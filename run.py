@@ -168,6 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--extra_tag', type=str, default="", help="Anything extra")
     parser.add_argument('--K', type=int, default=5, help="K")
     parser.add_argument('--warm_up', type=int, default=3)
+    parser.add_argument('--use_cls', type=bool, default=True)
 
     # TimeXer
     parser.add_argument('--patch_len', type=int, default=16, help='patch length')
@@ -176,6 +177,8 @@ if __name__ == '__main__':
     seed_worker, generator = set_seed(args.seed)
     args.seed_worker=seed_worker
     args.generator=generator
+    if args.task_name =="anomaly_detection":
+        args.use_cls=False
     if torch.cuda.is_available() and args.use_gpu:
         args.device = torch.device('cuda:{}'.format(args.gpu))
         print('Using GPU')
