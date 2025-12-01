@@ -100,9 +100,11 @@ class Model(nn.Module):
         if self.task_name == 'anomaly_detection':
             self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'classification':
+            from layers.PrototypeClassifier import PrototypeHead
             self.act = F.gelu
             self.dropout = nn.Dropout(configs.dropout)
-            self.projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
+            # self.projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
+            self.projection = PrototypeHead(configs.d_model * configs.seq_len, configs.num_class)
 
         self.tau_learner = Projector(enc_in=configs.enc_in, seq_len=configs.seq_len, hidden_dims=configs.p_hidden_dims,
                                      hidden_layers=configs.p_hidden_layers, output_dim=1)
@@ -205,8 +207,9 @@ class Model(nn.Module):
         enc_out, attns = self.encoder(enc_out, attn_mask=None, tau=tau, delta=delta)
 
         # Output
-        output = self.act(enc_out)  # the output transformer encoder/decoder embeddings don't include non-linearity
-        output = self.dropout(output)
+        output =enc_out
+        # output = self.act(enc_out)  # the output transformer encoder/decoder embeddings don't include non-linearity
+        # output = self.dropout(output)
         output = output * x_mark_enc.unsqueeze(-1)  # zero-out padding embeddings
         # (batch_size, seq_length * d_model)
         output = output.reshape(output.shape[0], -1)

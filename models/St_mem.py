@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from models.st_mem_vit import ST_MEM_ViT, TransformerBlock
+from layers.PrototypeClassifier import PrototypeHead
 
 
 __all__ = ['ST_MEM', 'st_mem_vit_small_dec256d4b', 'st_mem_vit_base_dec256d4b']
@@ -181,8 +182,8 @@ class Model(nn.Module):
         self.decoder_head = nn.Linear(decoder_embed_dim, patch_size)
         # --------------------------------------------------------------------------
         self.norm_pix_loss = norm_pix_loss
-        self.initialize_weights()
-        self.classification_head = MlpHead(embed_dim, self.num_classes)
+        self.projection = PrototypeHead(embed_dim, self.num_classes)
+
 
     def initialize_weights(self):
         
@@ -340,10 +341,10 @@ class Model(nn.Module):
         x_enc = x_enc.permute(0, 2, 1)
         
         # 使用forward_feature提取特征
-        feature = self.forward_feature(x_enc, use_gap=False)  # [B, D]
+        feature = self.forward_feature(x_enc, use_gap=True)  # [B, D]
         
         # 添加分类头
-        output = self.classification_head(feature)
+        output = self.projection(feature)
 
         
         return output
@@ -384,6 +385,9 @@ class Model(nn.Module):
             feature = latent.mean(dim=1)
             
         return feature
+    
+    def diversity_loss(self):
+        return self.projection.diversity_loss()
 
     def __repr__(self):
         print_str = f"{self.__class__.__name__}(\n"

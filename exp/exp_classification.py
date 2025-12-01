@@ -186,42 +186,6 @@ class Exp_Classification(Exp_Basic):
         # criterion = FocalLoss(gamma=2.0, alpha=alpha, reduction='mean')
         return criterion
     
-    @torch.no_grad()
-    def warmup_prototypes(self, train_loader, epochs=3, momentum=0.99):
-
-        print(f"\n🔹 Starting Prototype Warm-up ({epochs} epochs, momentum={momentum})")
-        self.model.eval()  # 不训练主网络
-        device = self.device
-
-        # 暂存原型
-        
-        
-        for epoch in range(epochs):
-            for batch_x, labels, _ in train_loader:
-                prototypes = self.model.prototypes.data.clone().to(device)
-                batch_x = batch_x.float().to(device)
-                labels = labels.long().squeeze(-1).to(device)
-
-                # 1️⃣ 通过 model 提取特征（复用 model 的 feature_extractor + backbone）
-                features = self.model.feature_extractor(batch_x.transpose(1, 2))
-                features = self.model.backbone(features, prototypes)
-                features = F.normalize(features, p=2, dim=-1)
-
-                # 2️⃣ 调用 model 内置的 _update_prototypes 更新原型
-                # 注意这里用 momentum 替代 self.gamma 临时 warm-up
-                old_gamma = self.model.gamma
-                self.model.gamma = momentum
-                self.model._update_prototypes(features, labels,0)
-                self.model.gamma = old_gamma
-
-            print(f"Warm-up epoch [{epoch+1}/{epochs}] done.")
-
-        # # 3️⃣ 写回最终原型
-        # prototypes = F.normalize(self.model.prototypes.data, p=2, dim=-1)
-        # self.model.prototypes.data.copy_(prototypes)
-
-
-
 
     def vali(self, vali_data, vali_loader, criterion):
         total_loss = []
@@ -275,12 +239,6 @@ class Exp_Classification(Exp_Basic):
         # 选择1：StepLR（固定epoch间隔衰减，常用）
         # 参数说明：step_size=10（每10个epoch衰减一次），gamma=0.5（每次衰减为原来的50%）
         scheduler = optim.lr_scheduler.StepLR(model_optim, step_size=self.args.patience, gamma=0.5)
-        
-        # （可选）选择2：ReduceLROnPlateau（基于验证损失衰减，更智能，按需替换）
-        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        #     model_optim, mode='min', factor=0.5, patience=5, verbose=True
-        # )  # 验证损失5个epoch不下降则衰减50%
-
         criterion = self._select_criterion()
         # if getattr(self.args, "TimePNP", True):
         #     self.warmup_prototypes(train_loader, epochs=prototype_warmup_epochs, momentum=0.95)
@@ -288,6 +246,7 @@ class Exp_Classification(Exp_Basic):
         for epoch in range(self.args.train_epochs):
             # -------------------------- 2. 每个epoch开始时记录当前学习率 --------------------------
             current_lr = model_optim.param_groups[0]['lr']
+            self.model.optimizing_prototypes = (epoch >= prototype_warmup_epochs)
             print(f"Epoch {epoch+1}/{self.args.train_epochs} | Current Learning Rate: {current_lr:.6f}")
 
             iter_count = 0
@@ -306,8 +265,12 @@ class Exp_Classification(Exp_Basic):
                 label = label.to(self.device)
                 outputs = self.model(batch_x, padding_mask, label,epoch)
                 loss = criterion(outputs, label.long().squeeze(-1))
-                if self.args.model=='TimePNP':
-                    loss+=self.model.diversity_loss()*0.1
+                if self.model.optimizing_prototypes:
+                    try:
+                        loss+=self.model.diversity_loss()
+                    except:
+                        loss+=self.model.projection.diversity_loss()
+                    # print("####")
                 train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
@@ -321,11 +284,7 @@ class Exp_Classification(Exp_Basic):
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=4.0)
                 model_optim.step()
-
-            # -------------------------- 3. 每个epoch结束后更新学习率 --------------------------
-            # StepLR：直接调用step()即可按固定间隔衰减
             scheduler.step()
-            # （若用ReduceLROnPlateau，需替换为：scheduler.step(vali_loss)，基于验证损失更新）
 
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
@@ -348,7 +307,7 @@ class Exp_Classification(Exp_Basic):
 
         best_model_path = path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
-        visualize_prototypes(self.model,setting)
+
 
         return self.model
 
@@ -453,7 +412,8 @@ class Exp_Classification(Exp_Basic):
         f.write('\n')
         f.write('\n')
         f.close()
-
+        if getattr(self.args, "TimePNP", False):
+            visualize_prototypes(self.model,setting)
         ckpt_result_path = os.path.join(self.code_save_root,"result.txt")
         with open(ckpt_result_path, 'w') as f:
             f.write(f"Setting: {setting}\n")
