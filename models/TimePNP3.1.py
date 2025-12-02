@@ -450,8 +450,8 @@ class Model(nn.Module):
         # print only top stats to avoid very large prints
         # (these prints helpful during debug; remove/guard in prod)
         print("prot_mass_mean:", proto_mass.mean().item(), "prot_mass_std:", proto_mass.std().item())
-        print("logits_mean:", logits.mean().item(), "logits_std:", logits.std().item())
-        print("proto_norm_mean:", prot_old.norm(dim=1).mean().item())
+        # print("logits_mean:", logits.mean().item(), "logits_std:", logits.std().item())
+        # print("proto_norm_mean:", prot_old.norm(dim=1).mean().item())
 
         # compute new prototypes
         proto_new = (Q.t() @ feats)  # [K, D]

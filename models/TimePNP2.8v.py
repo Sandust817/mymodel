@@ -393,8 +393,7 @@ class Model(nn.Module):
         return class_logits
 
     @torch.no_grad()
-    def _update_prototypes(self, features, labels,
-                                alpha=0.4,              # sinkhorn 比例
+    def _update_prototypes(self, features, labels,         # sinkhorn 比例
                                 sinkhorn_iters=3,
                                 sinkhorn_eps=0.05,
                                 eps=1e-6):
@@ -438,18 +437,8 @@ class Model(nn.Module):
             # class center
             class_center = f_c.mean(0, keepdim=True)  # [1, D]
 
-            # -- supervised target
-            supervised_target = class_center.repeat(K, 1)  # [K, D]
+            target = class_center.repeat(K, 1)  # [K, D]
 
-            # -- sinkhorn assignment
-            logits = f_c @ p_c.t()                    # [Nc, K]
-            Q = sinkhorn(logits)
-            numerator = Q.t() @ f_c                   # [K, D]
-            denom = Q.sum(0).unsqueeze(1) + eps
-            sinkhorn_target = numerator / denom       # [K, D]
-
-            # -- hybrid target
-            target = (1 - alpha) * supervised_target + alpha * sinkhorn_target
 
             # -- EMA update
             old = prot[c*K:(c+1)*K]

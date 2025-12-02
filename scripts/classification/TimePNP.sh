@@ -20,7 +20,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 200 \
   --patience 30 \
-  --warm_up 2 \
+  --warm_up 2 
 
 # python -u run.py \
 #   --task_name classification \
@@ -58,7 +58,7 @@ python -u run.py \
   --itr 1 \
   --learning_rate 0.002 \
   --train_epochs 200 \
-  --patience 20
+  --patience 30
 
 python -u run.py \
   --task_name classification \
