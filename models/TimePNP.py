@@ -126,8 +126,9 @@ class ProtoEncoderLayer(nn.Module):
 
         # Attention block
         self.cross_attn = nn.TransformerEncoderLayer(
-            embed_dim=d_model,
-            num_heads=nhead,
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
             dropout=dropout,
             batch_first=True,
             norm_first=True,
