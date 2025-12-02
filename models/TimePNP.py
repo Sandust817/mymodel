@@ -125,13 +125,11 @@ class ProtoEncoderLayer(nn.Module):
         self.norm_first = norm_first
 
         # Attention block
-        self.cross_attn = nn.TransformerEncoderLayer(
-            d_model=d_model,
-            nhead=nhead,
-            dim_feedforward=dim_feedforward,
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=d_model,
+            num_heads=nhead,
             dropout=dropout,
-            batch_first=True,
-            norm_first=True,
+            batch_first=True
         )
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
@@ -157,7 +155,7 @@ class ProtoEncoderLayer(nn.Module):
         return x
 
     def _sa_block(self, x,prototypes_batch):
-        x= self.cross_attn(x,prototypes_batch,prototypes_batch)
+        x,_= self.cross_attn(x,prototypes_batch,prototypes_batch)
         return self.dropout1(x)
 
     def _ff_block(self, x):
