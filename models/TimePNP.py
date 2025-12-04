@@ -352,6 +352,7 @@ class Model(nn.Module):
 
 
         self.relu=nn.ReLU()
+        self.dB=1
 
         self.optimizing_prototypes = config.optimizing_prototypes
         if(config.optimizing_prototypes ):
