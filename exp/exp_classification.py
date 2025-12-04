@@ -247,6 +247,7 @@ class Exp_Classification(Exp_Basic):
             # -------------------------- 2. 每个epoch开始时记录当前学习率 --------------------------
             current_lr = model_optim.param_groups[0]['lr']
             # self.model.optimizing_prototypes = (epoch >= prototype_warmup_epochs)
+            # self.model.optimizing_prototypes=False
             print(f"Epoch {epoch+1}/{self.args.train_epochs} | Current Learning Rate: {current_lr:.6f}")
 
             iter_count = 0
@@ -267,7 +268,8 @@ class Exp_Classification(Exp_Basic):
                 loss = criterion(outputs, label.long().squeeze(-1))
                 if self.model.optimizing_prototypes:
                     try:
-                        loss+=self.model.diversity_loss()*0.1
+                        None
+                        # loss+=self.model.diversity_loss()*0.1
                     except:
                         loss+=self.model.projection.diversity_loss()
                     # print("####")

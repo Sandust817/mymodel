@@ -169,6 +169,8 @@ if __name__ == '__main__':
     parser.add_argument('--K', type=int, default=5, help="K")
     parser.add_argument('--warm_up', type=int, default=3)
     parser.add_argument('--use_cls', type=bool, default=True)
+    parser.add_argument('--optimizing_prototypes', type=bool, default=True)
+    # optimizing_prototypes
 
     # TimeXer
     parser.add_argument('--patch_len', type=int, default=16, help='patch length')

@@ -8,166 +8,13 @@ import math
 
 from layers.mona import MonaFeatureExtractor
 
-class GatedMultiheadAttention(nn.Module):
-    def __init__(self, embed_dim, num_heads, dropout=0.0, gate_type="scalar"):
-        super().__init__()
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.head_dim = embed_dim // num_heads
-        self.batch_first = True  # ←←← 添加这一行
-
-        assert self.head_dim * num_heads == embed_dim, "embed_dim must be divisible by num_heads"
-
-        self.q_proj = nn.Linear(embed_dim, embed_dim)
-        self.k_proj = nn.Linear(embed_dim, embed_dim)
-        self.v_proj = nn.Linear(embed_dim, embed_dim)
-        self.out_proj = nn.Linear(embed_dim, embed_dim)
-
-        # Dropout for attention weights (standard in Transformer)
-        self.attn_dropout = nn.Dropout(dropout)
-        # Optional: dropout on output (also common)
-        self.out_dropout = nn.Dropout(dropout)
-
-        # Gate parameters
-        if gate_type == "scalar":
-            self.gate = nn.Parameter(torch.zeros(num_heads))  # (H,)
-        else:
-            # For vector gate per head (less common, but supported)
-            self.gate = nn.Parameter(torch.zeros(num_heads, self.head_dim))
-
-        self.dropout_p = dropout
-
-    def forward(self, query, key, value, attn_mask=None, need_weights=False):
-        B, N_q, _ = query.shape
-        N_k = key.shape[1]
-
-        # Project queries, keys, values
-        q = self.q_proj(query).view(B, N_q, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, N_q, D)
-        k = self.k_proj(key).view(B, N_k, self.num_heads, self.head_dim).transpose(1, 2)   # (B, H, N_k, D)
-        v = self.v_proj(value).view(B, N_k, self.num_heads, self.head_dim).transpose(1, 2) # (B, H, N_k, D)
-
-        # Scaled dot-product
-        attn_logits = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)  # (B, H, N_q, N_k)
-
-        # Apply gating BEFORE softmax (key idea from NeurIPS 2025)
-        if self.gate.dim() == 1:  # scalar per head
-            gate = self.gate.view(1, -1, 1, 1)  # (1, H, 1, 1)
-        else:
-            # If using vector gate, broadcasting to (1, H, 1, D) doesn't directly apply to (N_q, N_k)
-            # So scalar gate is strongly recommended
-            gate = self.gate.view(1, self.num_heads, 1, self.head_dim)
-            # In this case, you'd need to rethink gating strategy — usually not done
-            # For simplicity and correctness, we assume scalar gate
-            gate = gate.sum(dim=-1, keepdim=True)  # fallback, but not standard
-
-        gated_logits = attn_logits * torch.sigmoid(gate)
-
-        # Optional: apply attention mask (e.g., for causal attention)
-        if attn_mask is not None:
-            gated_logits = gated_logits + attn_mask
-
-        # Softmax + Dropout on attention weights
-        attn_weights = torch.softmax(gated_logits, dim=-1)
-        attn_weights = self.attn_dropout(attn_weights)
-
-        # Compute output
-        attn_output = torch.matmul(attn_weights, v)  # (B, H, N_q, D)
-        attn_output = attn_output.transpose(1, 2).contiguous().view(B, N_q, self.embed_dim)
-        attn_output = self.out_proj(attn_output)
-        attn_output = self.out_dropout(attn_output)
-
-        if need_weights:
-            return attn_output, attn_weights.mean(dim=1)  # average over heads
-        else:
-            return attn_output
-
-
-class TransformerEncoderLayer(nn.Module):
-    def __init__(self, d_model, nhead, dim_feedforward, dropout, norm_first=True,batch_first=True):
-        super().__init__()
-        self.norm_first = norm_first
-
-        # Attention block
-        self.self_attn = GatedMultiheadAttention(d_model, nhead,dropout=dropout)
-        self.dropout1 = nn.Dropout(dropout)
-        self.norm1 = nn.LayerNorm(d_model)
-
-        # FFN block
-        self.linear1 = nn.Linear(d_model, dim_feedforward)
-        self.dropout = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(dim_feedforward, d_model)
-        self.dropout2 = nn.Dropout(dropout)
-        self.norm2 = nn.LayerNorm(d_model)
-        self.activation = nn.GELU()  # 或 nn.ReLU()，但 GELU 更常见于 Transformer
-
-    def forward(self, src):
-        # Pre-norm or Post-norm
-        if self.norm_first:
-            # Pre-normalization (used in modern Transformers like ViT, BERT, etc.)
-            x = src + self._sa_block(self.norm1(src))
-            x = x + self._ff_block(self.norm2(x))
-        else:
-            x = self.norm1(src + self._sa_block(src))
-            x = self.norm2(x + self._ff_block(x))
-        return x
-
-    def _sa_block(self, x):
-        x = self.self_attn(x,x,x)
-        return self.dropout1(x)
-
-    def _ff_block(self, x):
-        x = self.linear2(self.dropout(self.activation(self.linear1(x))))
-        return self.dropout2(x)
-
-class ProtoEncoderLayer(nn.Module):
-    def __init__(self, d_model, nhead, dim_feedforward, dropout, norm_first=True):
-        super().__init__()
-        self.norm_first = norm_first
-
-        # Attention block
-        self.cross_attn = nn.MultiheadAttention(
-            embed_dim=d_model,
-            num_heads=nhead,
-            dropout=dropout,
-            batch_first=True
-        )
-        self.dropout1 = nn.Dropout(dropout)
-        self.norm1 = nn.LayerNorm(d_model)
-
-        # FFN block
-        self.linear1 = nn.Linear(d_model, dim_feedforward)
-        self.dropout = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(dim_feedforward, d_model)
-        self.dropout2 = nn.Dropout(dropout)
-        self.norm2 = nn.LayerNorm(d_model)
-        self.activation = nn.GELU()  # 或 nn.ReLU()，但 GELU 更常见于 Transformer
-
-    def forward(self, src,prototypes):
-        prototypes_batch = prototypes.unsqueeze(0).expand(src.size(0), -1, -1)  # [B, K, D]
-        # Pre-norm or Post-norm
-        if self.norm_first:
-            # Pre-normalization (used in modern Transformers like ViT, BERT, etc.)
-            x = src + self._sa_block(self.norm1(src),prototypes_batch)
-            x = x + self._ff_block(self.norm2(x))
-        else:
-            x = self.norm1(src +self._sa_block(self.norm1(src),prototypes_batch))
-            x = self.norm2(x + self._ff_block(x))
-        return x
-
-    def _sa_block(self, x,prototypes_batch):
-        x,_= self.cross_attn(x,prototypes_batch,prototypes_batch)
-        return self.dropout1(x)
-
-    def _ff_block(self, x):
-        x = self.linear2(self.dropout(self.activation(self.linear1(x))))
-        return self.dropout2(x)
     
 class PrototypeCrossAttention(nn.Module):
     """
     Prototype Cross-Attention with Transformer-style residual connection and LayerNorm.
     Structure: x + Dropout(Attention(LayerNorm(x), prototypes))
     """
-    def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.1):
+    def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.2):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -198,57 +45,40 @@ class PrototypeCrossAttention(nn.Module):
         residual = x
         
         # LayerNorm -> Cross-Attention -> Dropout -> Residual
-        x = self.norm(x)  # [B, L, D]
+        # x_norm = self.norm(x)  # [B, L, D]
         prototypes_batch = prototypes.unsqueeze(0).expand(x.size(0), -1, -1)  # [B, K, D]
+        prototypes_batch = F.normalize(prototypes_batch, dim=-1) 
         
         # Cross-attention: x queries attend to prototypes
         attn_output, _ = self.cross_attn(
             query=x,
             key=prototypes_batch,
-            value=prototypes_batch
+            value=prototypes_batch,
         )  # [B, L, D]
+        attn_output=self.norm(attn_output)
         # Residual connection
         x_out = residual + attn_output
         return x_out
 
-class TransformerEncoder(nn.Module):
-    def __init__(self, encoder_layer, num_layers):
-        super().__init__()
-        self.layers = nn.ModuleList([encoder_layer for _ in range(num_layers)])
-
-    def forward(self, src):
-        output = src
-        for layer in self.layers:
-            output = layer(output)
-        return output
-
-
 class ScoreAggregation(nn.Module):
-
-    def __init__(self, n_prototypes_total: int,num_classes: int,  init_val: float = 0.2, temperature: float = 0.1):
+    def __init__(self, n_prototypes_total:int, num_classes:int, init_val:float=0.2, temperature:float=0.1, learnable:bool=False):
         super().__init__()
-        # 核心：计算每个类别对应的原型数量（确保 n_prototypes_total 是 num_classes 的整数倍）
-        assert n_prototypes_total % num_classes == 0, "原型总数必须是类别数的整数倍"
-        self.k = n_prototypes_total // num_classes  # 每个类别对应 k 个原型
-        
-        # 可学习权重：[num_classes, k]，每个类别下的 k 个原型各有一个权重
-        self.weights = nn.Parameter(
-            torch.full((num_classes, self.k), init_val, dtype=torch.float32)
-        )
-        self.temperature = temperature  # 权重归一化的温度系数，控制权重差异度
+        assert n_prototypes_total % num_classes == 0
+        self.k = n_prototypes_total // num_classes
+        self.num_classes = num_classes
+        self.temperature = temperature
+        self.learnable = learnable
+
+        if self.learnable:
+            self.weights = nn.Parameter(torch.full((num_classes, self.k), init_val, dtype=torch.float32))
+        else:
+            # 固定均匀权重（保证 prototype logits 直接驱动 class logits）
+            self.register_buffer("weights", torch.full((num_classes, self.k), float(init_val), dtype=torch.float32))
 
     def forward(self, prototype_logits: torch.Tensor) -> torch.Tensor:
-
-        num_classes = self.weights.shape[0]
-        B, _ = prototype_logits.shape
-        
-
-        prototype_logits_grouped = prototype_logits.reshape(B, num_classes, self.k)
-
-        normalized_weights = F.softmax(self.weights / self.temperature, dim=-1) * self.k
-
-        class_logits = (prototype_logits_grouped * normalized_weights).sum(dim=-1)
-        
+        B, K = prototype_logits.shape
+        prototype_logits_grouped = prototype_logits.view(B, -1, self.k)  # [B, C, k]
+        class_logits = torch.logsumexp(prototype_logits_grouped, dim=-1)  # [B, C]
         return class_logits
     
 # ----------------------------
@@ -382,7 +212,7 @@ class PatchEmbedding(nn.Module):
 # Transformer Backbone with Channel-Independent Patching
 # ----------------------------
 class TransformerBackbone(nn.Module):
-    def __init__(self, config: Dict[str, Any], prototypes: Optional[nn.Parameter] = None):
+    def __init__(self, config: Dict[str, Any]):
         super().__init__()
         self.enc_in = config.d_model
         self.seq_len = config.seq_len
@@ -390,6 +220,7 @@ class TransformerBackbone(nn.Module):
         self.num_heads = config.n_heads
         self.num_layers = config.e_layers
         self.dropout = config.dropout
+        self.proto=config.optimizing_prototypes
 
         self.use_patch = getattr(config, "use_patch", 0)
         self.patch_size = getattr(config, "patch_size", 16)
@@ -430,24 +261,20 @@ class TransformerBackbone(nn.Module):
             transformer_seq_len += 1
 
         # Transformer encoder
-        encoder_layer = TransformerEncoderLayer(
+        encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.embed_dim,
             nhead=self.num_heads,
             dim_feedforward=self.embed_dim * 4,
             dropout=self.dropout,
+            batch_first=True,
             norm_first=True,
         )
-        self.transformer = TransformerEncoder(encoder_layer, num_layers=self.num_layers-1)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=self.num_layers-1)
         self.norm = nn.LayerNorm(self.embed_dim)
 
         # ✅ Cross attention to prototypes
-        self.proto_layer = ProtoEncoderLayer(
-            d_model=self.embed_dim,
-            nhead=self.num_heads,
-            dim_feedforward=self.embed_dim * 4,
-            dropout=self.dropout,
-            norm_first=True,
-        )
+        self.proto_attn = PrototypeCrossAttention(embed_dim=self.embed_dim, num_heads=self.num_heads)
+
         self._init_weights()
 
     def _init_weights(self):
@@ -478,12 +305,12 @@ class TransformerBackbone(nn.Module):
 
         # Transformer encoder
         x = self.transformer(x)
-        # x = self.norm(x)
+        x = self.norm(x)
 
         # # ✅ Cross-attention with prototypes
-        x = self.proto_layer(x, prototypes)
-        x = self.proto_layer(x, prototypes)
-
+        # if(self.proto):
+        #     x = self.proto_attn(x, prototypes)
+            # x = self.proto_attn(x, prototypes)
 
         # Extract CLS and aggregate
         cls_tokens = x[:, 0]
@@ -511,20 +338,30 @@ class Model(nn.Module):
 
         # New: Scalable loss config
         self.use_scalenorm = getattr(config, "use_scalenorm", False)
-        self.scalable_alpha = getattr(config, "scalable_alpha", 1.0)
-        self.scalable_gamma = getattr(config, "scalable_gamma", 2.0)
 
         # Backbone
         self.backbone =TransformerBackbone(config)
 
         # Prototypes
-        self.prototypes = nn.Parameter(torch.randn(self.n_prototypes_total, self.embed_dim))
-        nn.init.xavier_normal_(self.prototypes)
-        self.prototypes.data = F.normalize(self.prototypes.data, dim=-1)
+        # 初始化方向（单位向量）
+        directions = F.normalize(torch.randn(self.n_prototypes_total, self.embed_dim), dim=-1)
+        # 初始化幅值（例如 0.5）
+        magnitudes = torch.full((self.n_prototypes_total, 1), 3.0)
+        prototypes = directions * magnitudes
+        self.prototypes = nn.Parameter(prototypes)
+
+
         self.relu=nn.ReLU()
 
-        self.optimizing_prototypes = True
-        self.classifier=ScoreAggregation(self.n_prototypes_total,self.num_class)
+        self.optimizing_prototypes = config.optimizing_prototypes
+        if(config.optimizing_prototypes ):
+            self.classifier=ScoreAggregation(self.n_prototypes_total,self.num_class)
+        else:
+            self.classifier=nn.Linear(self.embed_dim,self.num_class)
+
+
+
+
 
     def forward(
         self,
@@ -550,76 +387,73 @@ class Model(nn.Module):
             x = scaled_x.transpose(1, 2)  # to [B, C, L]
         
         features = self.backbone(x,self.prototypes)  # [B, D]
-        features = F.normalize(features, p=2, dim=-1)
-        prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
+        if( self.optimizing_prototypes) :
+            # features = F.normalize(features, p=2, dim=-1)
+            # prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
+            logits = torch.mm(features, self.prototypes.t())  # [B, K]
 
-        logits = torch.mm(features, prototypes_norm.t())  # [B, K]
-
-        if self.training and self.optimizing_prototypes and labels is not None:
-            # 注意：labels 在 forward 中是 Optional[Tensor]
-            # 确保 labels 是 [B] 形状
-            label_tensor = labels.long().squeeze(-1)  # [B]
-            self._update_prototypes(features, label_tensor)
-        class_logits = self.classifier(logits)  # [B, num_class]
-        return class_logits
+            if self.training and self.optimizing_prototypes and labels is not None:
+                # 注意：labels 在 forward 中是 Optional[Tensor]
+                # 确保 labels 是 [B] 形状
+                label_tensor = labels.long().squeeze(-1)  # [B]
+                self._update_prototypes(features)
+            class_logits = self.classifier(logits)  # [B, num_class]
+            return class_logits
+        else:
+            return self.classifier(features)
 
     @torch.no_grad()
-    def _update_prototypes(self, features, labels,         # sinkhorn 比例
-                                sinkhorn_iters=3,
-                                sinkhorn_eps=0.05,
-                                eps=1e-6):
+    def _update_prototypes(
+        self,
+        features,
+        sinkhorn_iters=3,
+        sinkhorn_eps=1,
+        eps=0.5,
+    ):
         """
-        Hybrid update specifically designed for ScoreAggregation-based classification.
-
-        Ensures:
-        - class center is preserved
-        - inside the class, prototypes get diversity (sinkhorn)
-        - EMA for stability
-        - final prototypes remain normalized
+        Fully unsupervised prototype update:
+        - No labels required
+        - Sinkhorn for balanced soft assignment
+        - Weighted mean update for each prototype
+        - EMA + normalization
         """
-        device = features.device
         B, D = features.shape
-        C = self.num_class
-        K = self.k
+        K_total = self.n_prototypes_total
+        gamma = self.gamma
 
-        prot = self.prototypes.data
+        feats_norm = F.normalize(features, dim=-1)               # [B, D]
+        prot_old = F.normalize(self.prototypes.data, dim=-1)     # [K, D]
 
-        feats_norm = F.normalize(features, dim=-1)
-        prot_norm = F.normalize(prot, dim=-1)
+        logits = feats_norm @ prot_old.t()
 
-        def sinkhorn(Q):
-            Q = torch.exp(Q / sinkhorn_eps)
-            Q /= Q.sum()
-            for _ in range(sinkhorn_iters):
-                Q = Q / (Q.sum(dim=1, keepdim=True) + eps)
-                Q = Q / (Q.sum(dim=0, keepdim=True) + eps)
+        def sinkhorn(Q, n_iters=sinkhorn_iters):
+            sum_Q = torch.sum(Q)
+            Q /= sum_Q
+
+            r = torch.ones(Q.shape[0], device=Q.device) / Q.shape[0]
+            c = torch.ones(Q.shape[1], device=Q.device) / Q.shape[1]
+
+            for _ in range(n_iters):
+                Q /= torch.sum(Q, dim=1, keepdim=True)
+                Q *= r.unsqueeze(1)
+                Q /= torch.sum(Q, dim=0, keepdim=True)
+                Q *= c.unsqueeze(0)
+
             return Q
 
-        new_proto_all = prot_norm.clone()
 
-        for c in range(C):
-            idx = (labels == c).nonzero(as_tuple=True)[0]
-            if idx.numel() == 0:
-                continue
+        Q = sinkhorn(logits)  # [B, K]
+        if(self.dB%15==0):
+            print(Q.mean(dim=0))
+        self.dB+=1
 
-            f_c = feats_norm[idx]              # [Nc, D]
-            p_c = prot_norm[c*K:(c+1)*K]       # [K, D]
+        proto_new = (Q.T @ feats_norm)                     # [K, D]
+        proto_new = proto_new / (Q.sum(0).unsqueeze(1) + eps)
 
-            # class center
-            class_center = f_c.mean(0, keepdim=True)  # [1, D]
+        updated = gamma * prot_old + (1 - gamma) * proto_new
+        updated = F.normalize(updated, dim=-1)
 
-            target = class_center.repeat(K, 1)  # [K, D]
-
-
-            # -- EMA update
-            old = prot[c*K:(c+1)*K]
-            updated = self.gamma * old + (1 - self.gamma) * target
-
-            # -- normalize
-            new_proto_all[c*K:(c+1)*K] = F.normalize(updated, dim=-1)
-
-        self.prototypes.data.copy_(new_proto_all)
-
+        self.prototypes.data.copy_(updated)
 
 
     def diversity_loss(self):

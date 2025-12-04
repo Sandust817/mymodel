@@ -9,7 +9,7 @@ python -u run.py \
   --model_id EthanolConcentration \
   --model TimePNP \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
@@ -20,7 +20,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 200 \
   --patience 30 \
-  --warm_up 2 
+  --warm_up 3 
 
 # python -u run.py \
 #   --task_name classification \
@@ -29,7 +29,7 @@ python -u run.py \
 #   --model_id FaceDetection \
 #   --model $model_name \
 #   --data UEA \
-#   --e_layers 3 \
+#   --e_layers 2 \
 #   --batch_size 32 \
 #   --dropout 0.2 \
 #   --d_model 128 \
@@ -48,7 +48,7 @@ python -u run.py \
   --model_id Handwriting \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
@@ -56,9 +56,9 @@ python -u run.py \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.002 \
+  --learning_rate 0.003 \
   --train_epochs 200 \
-  --patience 30
+  --patience 40
 
 python -u run.py \
   --task_name classification \
@@ -67,7 +67,7 @@ python -u run.py \
   --model_id Heartbeat \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
@@ -86,7 +86,7 @@ python -u run.py \
   --model_id JapaneseVowels \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
@@ -105,7 +105,7 @@ python -u run.py \
   --model_id PEMS-SF \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
@@ -124,7 +124,7 @@ python -u run.py \
   --model_id SelfRegulationSCP1 \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
@@ -143,7 +143,7 @@ python -u run.py \
   --model_id SelfRegulationSCP2 \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
@@ -162,7 +162,7 @@ python -u run.py \
   --model_id SpokenArabicDigits \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
@@ -181,7 +181,7 @@ python -u run.py \
   --model_id UWaveGestureLibrary \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \
