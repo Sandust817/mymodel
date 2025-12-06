@@ -61,57 +61,24 @@ class PrototypeCrossAttention(nn.Module):
         return x_out
 
 class ScoreAggregation(nn.Module):
-    def __init__(
-        self,
-        n_prototypes_total: int,
-        num_classes: int,
-        temperature: float = 0.2,  # 控制 prototype-level softmax 的锐度
-        weight_temperature: float = 1.0,  # 控制可学习权重的锐度
-        learnable_weights: bool = True
-    ):
+    def __init__(self, n_prototypes_total:int, num_classes:int, init_val:float=0.2, temperature:float=0.1, learnable:bool=False):
         super().__init__()
         assert n_prototypes_total % num_classes == 0
         self.k = n_prototypes_total // num_classes
         self.num_classes = num_classes
         self.temperature = temperature
-        self.weight_temperature = weight_temperature
-        self.learnable_weights = learnable_weights
+        self.learnable = learnable
 
-        if self.learnable_weights:
-            # 初始化为均匀权重（logits=0）
-            self.weights = nn.Parameter(torch.zeros(num_classes, self.k))
+        if self.learnable:
+            self.weights = nn.Parameter(torch.full((num_classes, self.k), init_val, dtype=torch.float32))
         else:
-            self.register_buffer("weights", torch.zeros(num_classes, self.k))
+            # 固定均匀权重（保证 prototype logits 直接驱动 class logits）
+            self.register_buffer("weights", torch.full((num_classes, self.k), float(init_val), dtype=torch.float32))
 
     def forward(self, prototype_logits: torch.Tensor) -> torch.Tensor:
-        """
-        prototype_logits: [B, K], values in [-1, 1] (cosine similarities)
-        Returns: [B, num_classes]
-        """
         B, K = prototype_logits.shape
-        assert K == self.num_classes * self.k, f"Expected {self.num_classes * self.k}, got {K}"
-
-        # Reshape to [B, C, k]
-        logits = prototype_logits.view(B, self.num_classes, self.k)  # [B, C, k]
-
-        # Step 1: 对每个类的 k 个原型计算相似度概率（prototype-level softmax）
-        # 温度控制：小温度 → 尖锐，大温度 → 平滑
-        proto_probs = F.softmax(logits / self.temperature, dim=-1)  # [B, C, k]
-
-        # Step 2: 获取可学习权重（作用于 prototype 维度）
-        if self.learnable_weights:
-            # weights 是 logits，通过 weight_temperature 控制锐度
-            weight_probs = F.softmax(self.weights / self.weight_temperature, dim=-1)  # [C, k]
-        else:
-            weight_probs = torch.ones_like(self.weights) / self.k  # 均匀
-
-        # Step 3: 加权聚合概率
-        weighted_probs = proto_probs * weight_probs.unsqueeze(0)  # [B, C, k]
-        class_probs = weighted_probs.sum(dim=-1)  # [B, C]
-
-        # Step 4: 转换为 logits（用于 CE loss）
-        class_logits = torch.log(class_probs + 1e-8)  # [B, C]
-
+        prototype_logits_grouped = prototype_logits.view(B, -1, self.k)  # [B, C, k]
+        class_logits = torch.logsumexp(prototype_logits_grouped, dim=-1)  # [B, C]
         return class_logits
     
 # ----------------------------
@@ -302,7 +269,7 @@ class TransformerBackbone(nn.Module):
             batch_first=True,
             norm_first=True,
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=self.num_layers)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=self.num_layers-1)
         self.norm = nn.LayerNorm(self.embed_dim)
 
         # ✅ Cross attention to prototypes
@@ -341,8 +308,8 @@ class TransformerBackbone(nn.Module):
         x = self.norm(x)
 
         # # ✅ Cross-attention with prototypes
-        if(self.proto):
-            x = self.proto_attn(x, prototypes)
+        # if(self.proto):
+        #     x = self.proto_attn(x, prototypes)
             # x = self.proto_attn(x, prototypes)
 
         # Extract CLS and aggregate
@@ -363,8 +330,7 @@ class Model(nn.Module):
         self.num_class = config.num_class
         self.embed_dim = config.d_model
         self.temperature = getattr(config, "temperature", 0.2)
-        self.gamma_u = 0.9
-        self.gamma_d = getattr(config, "gamma", 0.999)
+        self.gamma = getattr(config, "gamma", 0.95)
         self.k = getattr(config, "k", 5)
         self.n_prototypes_total = min(self.k * self.num_class, 200) 
         self.feature_extractor=MonaFeatureExtractor(self.enc_in,self.embed_dim)
@@ -382,7 +348,7 @@ class Model(nn.Module):
         # 初始化幅值（例如 0.5）
         magnitudes = torch.full((self.n_prototypes_total, 1), 3.0)
         prototypes = directions * magnitudes
-        self.prototypes = nn.Parameter(prototypes, requires_grad=False)
+        self.prototypes = nn.Parameter(prototypes)
 
 
         self.relu=nn.ReLU()
@@ -423,25 +389,24 @@ class Model(nn.Module):
         
         features = self.backbone(x,self.prototypes)  # [B, D]
         if( self.optimizing_prototypes) :
-            features = F.normalize(features, p=2, dim=-1)
-            prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
-            logits = torch.mm(features, prototypes_norm.t())  # [B, K]
+            # features = F.normalize(features, p=2, dim=-1)
+            # prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
+            logits = torch.mm(features, self.prototypes.t())  # [B, K]
 
             if self.training and self.optimizing_prototypes and labels is not None:
                 # 注意：labels 在 forward 中是 Optional[Tensor]
                 # 确保 labels 是 [B] 形状
                 label_tensor = labels.long().squeeze(-1)  # [B]
-                self._update_prototypes(features,label_tensor)
+                self._update_prototypes(features)
             class_logits = self.classifier(logits)  # [B, num_class]
             return class_logits
         else:
             return self.classifier(features)
 
-
     @torch.no_grad()
     def _update_prototypes(self, features, labels, eps=1e-6):
         B, D = features.shape
-        gamma = 0.999
+        gamma = self.gamma
 
         # 归一化方向
         features_dir = F.normalize(features, dim=-1)
