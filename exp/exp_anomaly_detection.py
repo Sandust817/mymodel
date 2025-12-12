@@ -47,7 +47,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
             for i, (batch_x, _) in enumerate(vali_loader):
                 batch_x = batch_x.float().to(self.device)
 
-                outputs = self.model(batch_x, None, None, None, anomaly_mode=True)
+                outputs = self.model(batch_x, None, None, None)
 
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, :, f_dim:]
@@ -89,7 +89,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
 
                 batch_x = batch_x.float().to(self.device)
 
-                outputs = self.model(batch_x, None, None, None, anomaly_mode=True)
+                outputs = self.model(batch_x, None, None, None)
 
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, :, f_dim:]
@@ -145,7 +145,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
             for i, (batch_x, batch_y) in enumerate(train_loader):
                 batch_x = batch_x.float().to(self.device)
                 # reconstruction
-                outputs = self.model(batch_x, None, None, None, anomaly_mode=True)
+                outputs = self.model(batch_x, None, None, None)
                 # criterion
                 score = torch.mean(self.anomaly_criterion(batch_x, outputs), dim=-1)
                 score = score.detach().cpu().numpy()
@@ -160,7 +160,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
         for i, (batch_x, batch_y) in enumerate(test_loader):
             batch_x = batch_x.float().to(self.device)
             # reconstruction
-            outputs = self.model(batch_x, None, None, None, anomaly_mode=True)
+            outputs = self.model(batch_x, None, None, None)
             # criterion
             score = torch.mean(self.anomaly_criterion(batch_x, outputs), dim=-1)
             score = score.detach().cpu().numpy()

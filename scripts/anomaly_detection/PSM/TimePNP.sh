@@ -3,7 +3,7 @@ export CUDA_VISIBLE_DEVICES=0
 python -u run.py \
   --task_name anomaly_detection \
   --is_training 1 \
-  --root_path ./dataset/PSM \
+  --root_path /root/data/anomaly_detection/PSM/ \
   --model_id PSM \
   --model TimePNP \
   --data PSM \
@@ -13,8 +13,8 @@ python -u run.py \
   --d_model 128 \
   --d_ff 128 \
   --e_layers 3 \
-  --enc_in 38 \
-  --c_out 38 \
+  --enc_in 25 \
+  --c_out 25 \
   --anomaly_ratio 0.5 \
   --batch_size 128 \
   --train_epochs 200 \
