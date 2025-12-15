@@ -8,24 +8,30 @@ import math
 
 from layers.mona import MonaFeatureExtractor
 
-# --- keep FFTFrequencyWeight, ViTPatchEmbedding, PatchEmbedding, TransformerBackbone mostly the same ---
-# (I reuse your original implementations; omit here to avoid redundancy in this message.
-#  Assume they are identical to what you pasted, except TransformerBackbone no longer calls proto_attn.)
-# --------------------------------------------------------------------
+    
+class ContextPrototypes(nn.Module):
+    def __init__(self, num_proto, dim):
+        super().__init__()
+        directions = F.normalize(torch.randn(num_proto, dim), dim=-1)
+        # 初始化幅值（例如 0.5）
+        magnitudes = torch.full((num_proto, 1), 1.0)
+        prototypes = directions * magnitudes
+        self.prototypes = nn.Parameter(prototypes)
 
-# energy and prototype utilities
 class PrototypeCrossAttention(nn.Module):
     """
     Prototype Cross-Attention with Transformer-style residual connection and LayerNorm.
     Structure: x + Dropout(Attention(LayerNorm(x), prototypes))
     """
-    def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.2):
+    def __init__(self, embed_dim: int, num_heads: int,num_proto, dropout: float = 0.2):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         
         # LayerNorm before attention (like norm_first=True in Transformer)
-        self.norm = nn.LayerNorm(embed_dim)
+        self.context_proto = ContextPrototypes(num_proto, embed_dim)
+        self.norm_x = nn.LayerNorm(embed_dim)
+        self.norm_p = nn.LayerNorm(embed_dim)
         
         # Multihead cross-attention: queries from x, keys/values from prototypes
         self.cross_attn = nn.MultiheadAttention(
@@ -34,69 +40,77 @@ class PrototypeCrossAttention(nn.Module):
             dropout=dropout,
             batch_first=True
         )
+        self.alpha = nn.Parameter(torch.zeros(1))  # 关键！
         
         # Dropout for residual connection
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x: torch.Tensor, prototypes: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         """
-        Args:
-            x: [B, L, D] - input sequence (e.g., transformer output)
-            prototypes: [K, D] - prototype matrix (normalized)
-        Returns:
-            x_out: [B, L, D] - residual output
+        x: [B, L, D]
         """
-        # Save original x for residual connection
-        residual = x
-        
-        # LayerNorm -> Cross-Attention -> Dropout -> Residual
-        # x_norm = self.norm(x)  # [B, L, D]
-        prototypes_batch = prototypes.unsqueeze(0).expand(x.size(0), -1, -1)  # [B, K, D]
-        
-        # Cross-attention: x queries attend to prototypes
-        attn_output, _ = self.cross_attn(
-            query=x,
-            key=prototypes_batch,
-            value=prototypes_batch
-        )  # [B, L, D]
-        attn_output=self.norm(attn_output)
-        # Residual connection
-        x_out = residual + attn_output
-        return x_out
+        B, L, D = x.shape
 
-class ScoreAggregation(nn.Module):
-    def __init__(
-        self,
-        n_prototypes_total: int,
-        num_classes: int,
-        temperature: float = 0.2,  # 用于 logits 锐化（可选）
-    ):
-        super().__init__()
-        self.num_classes = num_classes
-        self.n_prototypes_total = n_prototypes_total
-        self.temperature = temperature
+        x_norm = self.norm_x(x)
+        proto = self.norm_p(self.context_proto.prototypes)
+        proto = proto.unsqueeze(0).expand(B, -1, -1)
 
-        # 可学习映射矩阵: [K, C]
-        # 初始化为 Xavier（或 small random）
-        self.prototype_to_class = nn.Parameter(
-            torch.randn(n_prototypes_total, num_classes) * 0.1
+        attn_out, _ = self.cross_attn(
+            query=x_norm,
+            key=proto,
+            value=proto
         )
 
+        return x + attn_out
+
+class TransformerEncoderLayer(nn.Module):
+    def __init__(self, d_model, nhead, dim_feedforward, dropout, norm_first=True):
+        super().__init__()
+        self.norm_first = norm_first
+
+        # Attention block
+        self.self_attn = PrototypeCrossAttention(d_model, nhead,dropout=dropout)
+        self.dropout1 = nn.Dropout(dropout)
+        self.norm1 = nn.LayerNorm(d_model)
+
+        # FFN block
+        self.linear1 = nn.Linear(d_model, dim_feedforward)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(dim_feedforward, d_model)
+        self.dropout2 = nn.Dropout(dropout)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.activation = nn.GELU()  # 或 nn.ReLU()，但 GELU 更常见于 Transformer
+
+    def forward(self, src):
+        # Pre-norm or Post-norm
+        if self.norm_first:
+            # Pre-normalization (used in modern Transformers like ViT, BERT, etc.)
+            x = src + self._sa_block(self.norm1(src))
+            x = x + self._ff_block(self.norm2(x))
+        else:
+            x = self.norm1(src + self._sa_block(src))
+            x = self.norm2(x + self._ff_block(x))
+        return x
+
+    def _sa_block(self, x):
+        x = self.self_attn(x,x,x)
+        return self.dropout1(x)
+
+    def _ff_block(self, x):
+        x = self.linear2(self.dropout(self.activation(self.linear1(x))))
+        return self.dropout2(x)
+
+class ScoreAggregation(nn.Module):
+    def __init__(self, n_prototypes_total: int, num_classes: int, temperature: float = 0.2):
+        super().__init__()
+        assert n_prototypes_total % num_classes == 0
+        self.k = n_prototypes_total // num_classes
+        self.temperature = temperature
+
     def forward(self, prototype_logits: torch.Tensor) -> torch.Tensor:
-        """
-        prototype_logits: [B, K] (cosine similarities ∈ [-1, 1])
-        Returns: [B, num_classes]
-        """
         B, K = prototype_logits.shape
-        assert K == self.n_prototypes_total, f"Expected {self.n_prototypes_total}, got {K}"
-
-        # 可选：锐化 logits（增强判别力）
-        logits_sharpened = prototype_logits / self.temperature  # [B, K]
-
-        # 映射到类别 logits: [B, K] @ [K, C] = [B, C]
-        class_logits = logits_sharpened @ self.prototype_to_class  # [B, C]
-
-        return class_logits
+        logits = prototype_logits.view(B, -1, self.k)  # [B, C, k]
+        return torch.logsumexp(logits / self.temperature, dim=-1)  # [B, C]
     
 # ----------------------------
 # FFT Frequency Weighting Module
@@ -224,26 +238,10 @@ class PatchEmbedding(nn.Module):
         x = self.proj(x)  # [B*C, n_patches, embed_dim]
         return x
 
-def proto_energy(similarities: torch.Tensor, tau: float = 0.1) -> torch.Tensor:
-    """
-    similarities: [B, K] (cosine sims)
-    returns energy: [B] (lower => more likely normal)
-    energy = -tau * logsumexp(sim / tau)
-    """
-    return -tau * torch.logsumexp(similarities / tau, dim=1)
 
-def prototype_orthogonal_loss(prototypes: torch.Tensor) -> torch.Tensor:
-    """
-    Encourage prototypes to be orthogonal (diverse).
-    prototypes: [K, D] (not necessarily normalized)
-    We'll normalize inside.
-    """
-    P = F.normalize(prototypes, dim=-1)
-    sim = torch.mm(P, P.t())
-    I = torch.eye(P.size(0), device=P.device)
-    # zero out diagonal contribution optionally (but keep mean-square)
-    return ((sim - I) ** 2).mean()
-
+# ----------------------------
+# Transformer Backbone with Channel-Independent Patching
+# ----------------------------
 class TransformerBackbone(nn.Module):
     def __init__(self, config: Dict[str, Any]):
         super().__init__()
@@ -287,11 +285,7 @@ class TransformerBackbone(nn.Module):
             nn.init.normal_(self.pos_encoding, std=0.02)
 
         # [CLS] token
-        if(config.task_name=='anomaly_detection'):
-            self.use_cls_token = False
-        else:
-            self.use_cls_token = True
-
+        self.use_cls_token = True
         if self.use_cls_token:
             self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
             nn.init.normal_(self.cls_token, std=0.02)
@@ -310,7 +304,7 @@ class TransformerBackbone(nn.Module):
         self.norm = nn.LayerNorm(self.embed_dim)
 
         # ✅ Cross attention to prototypes
-        self.proto_attn = PrototypeCrossAttention(embed_dim=self.embed_dim, num_heads=self.num_heads)
+        self.proto_attn = PrototypeCrossAttention(embed_dim=self.embed_dim, num_heads=self.num_heads,num_proto=config.K*config.num_class)
 
         self._init_weights()
 
@@ -345,18 +339,17 @@ class TransformerBackbone(nn.Module):
         x = self.norm(x)
 
         # # ✅ Cross-attention with prototypes
-        # if(self.proto):
+        if(self.proto):
+            x = self.proto_attn(x)
         #     x = self.proto_attn(x, prototypes)
-            # x = self.proto_attn(x, prototypes)
 
         # Extract CLS and aggregate
-        if self.use_cls_token:
-            x = x[:, 0]
+        cls_tokens = x[:, 0]
         if self.use_patch == 1:
-            cls_tokens = x.view(B, C, self.embed_dim)
+            cls_tokens = cls_tokens.view(B, C, self.embed_dim)
             cls_final = cls_tokens.mean(dim=1)
         else:
-            cls_final = x
+            cls_final = cls_tokens
 
         return cls_final
 
@@ -365,102 +358,141 @@ class Model(nn.Module):
         super().__init__()
         self.enc_in = config.enc_in
         self.seq_len = config.seq_len
-        self.num_class = getattr(config, "num_class", None)
+        self.num_class = config.num_class
         self.embed_dim = config.d_model
-        self.temperature = getattr(config, "temperature", 0.1)  # for energy
-        self.gamma_proto = getattr(config, "proto_ema_gamma", 0.999)
+        self.temperature = getattr(config, "temperature", 1)
+        self.gamma_u = 0.9
+        self.gamma_d = getattr(config, "gamma", 0.999)
         self.k = getattr(config, "k", 5)
-        self.n_prototypes_total = getattr(config, "n_prototypes_total", 8)
+        self.n_prototypes_total = min(self.k * self.num_class, 200) 
+        self.feature_extractor=MonaFeatureExtractor(self.enc_in,self.embed_dim)
 
-        # Feature extractor (you had MonaFeatureExtractor)
-        self.feature_extractor = MonaFeatureExtractor(self.enc_in, self.embed_dim)
 
-        # Backbone - reuse TransformerBackbone but we removed proto_attn call
-        self.backbone = TransformerBackbone(config)
+        # New: Scalable loss config
+        self.use_scalenorm = getattr(config, "use_scalenorm", False)
 
-        # prototypes
-        self.prototypes = nn.Parameter(torch.randn(self.n_prototypes_total, self.embed_dim))
-        nn.init.xavier_normal_(self.prototypes)
-        # normalize initially (always keep prototypes normalized for cosine usage)
-        with torch.no_grad():
-            self.prototypes.data = F.normalize(self.prototypes.data, dim=-1)
+        # Backbone
+        self.backbone =TransformerBackbone(config)
 
-        # Regularization weights
-        self.optimizing_prototypes=config.optimizing_prototypes
-        self.use_sinkhorn = getattr(config, "use_sinkhorn", True)
-        self.sinkhorn_iters = getattr(config, "sinkhorn_iters", 3)
-        self.sinkhorn_eps = getattr(config, "sinkhorn_eps", 0.05)
-        self.classifier = nn.Linear(self.embed_dim, self.enc_in, bias=True)
+        # Prototypes
+        # 初始化方向（单位向量）
+        directions = F.normalize(torch.randn(self.n_prototypes_total, self.embed_dim), dim=-1)
+        # 初始化幅值（例如 0.5）
+        magnitudes = torch.full((self.n_prototypes_total, 1), 10.0)
+        prototypes = directions * magnitudes
+        self.prototypes = nn.Parameter(prototypes, requires_grad=False)
 
-        # for numerical stability
-        self.eps = 1e-6
 
-    def forward(self, x, _a=None, labels: Optional[Tensor] = None, _b=None, return_sim_maps: bool = False):
+        self.relu=nn.ReLU()
+        self.dB=1
+
+        self.optimizing_prototypes = config.optimizing_prototypes
+        if(config.optimizing_prototypes ):
+            self.classifier=ScoreAggregation(self.n_prototypes_total,self.num_class)
+        else:
+            self.classifier=nn.Linear(self.embed_dim,self.num_class)
+
+
+
+
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        _a=None,
+        labels: Optional[torch.Tensor] = None,
+        _b=None,
+        return_sim_maps: bool = False,
+    ):
+        #input=[B,L,C]
         x1 = self.feature_extractor(x.transpose(1, 2))
         x = x1.transpose(1, 2)
 
+        observed_mask = torch.ones_like(x)  # 假设所有数据有效（实际场景可传入真实掩码）
 
-        scaled_x = x
-
+        # Step 2: （可选）ScaleNorm归一化
+        if self.use_scalenorm:
+            scaled_x, _, _ = self.scaler(x, observed_mask)
+        else:
+            scaled_x = x  # 不归一化，直接使用原始数据
+            
         if scaled_x.shape[1] != self.backbone.enc_in:
-            x = scaled_x.transpose(1, 2)
+            x = scaled_x.transpose(1, 2)  # to [B, C, L]
+        
+        features = self.backbone(x,self.prototypes)  # [B, D]
+        if( self.optimizing_prototypes) :
+            feature = F.normalize(features, p=2, dim=-1)
+            prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
+            logits = torch.mm(feature, prototypes_norm.t())  # [B, K]
 
-        features = self.backbone(x, self.prototypes)
-        features = F.normalize(features, p=2, dim=-1)
-        prot_norm = F.normalize(self.prototypes, p=2, dim=-1)
+            if self.training and self.optimizing_prototypes and labels is not None:
+                # 注意：labels 在 forward 中是 Optional[Tensor]
+                # 确保 labels 是 [B] 形状
+                label_tensor = labels.long().squeeze(-1)  # [B]
+                self._update_prototypes(features,label_tensor)
+            class_logits = self.classifier(logits)  # [B, num_class]
+            return class_logits
+        else:
+            return self.classifier(features)
 
-        if self.training and self.optimizing_prototypes:
-            feature=features.mean(dim=1)
-            self._update_prototypes(feature)
-        return self.classifier(features)
 
     @torch.no_grad()
-    def _update_prototypes(self, features: torch.Tensor):
-        """
-        Update prototypes with features (features should be normalized already)
-        features: [M, D]  (M may be < B)
-        Algorithm:
-            - Option A: simple soft-assignment (softmax over cos sims) -> weighted sum
-            - Option B: Sinkhorn balanced assignment (optional)
-            - EMA update with gamma_proto
-            - Normalize prototypes after update
-        """
-        M, D = features.shape
-        K = self.n_prototypes_total
-        proto_dir = F.normalize(self.prototypes.data, dim=-1)  # [K, D]
-        logits = features @ proto_dir.t()  # [M, K]
+    def _update_prototypes(self, features, labels, eps=1e-6):
+        B, D = features.shape
+        # gamma = 0.999 - (0.999 - 0.99) * math.exp(-self.dB / 40)
+        gamma=0.995
+        self.dB+=1
 
-        # soft assignment
-        if self.use_sinkhorn and M >= K:
-            # Sinkhorn-like balanced assignment over the selected subset
-            Q = torch.exp(logits / (self.sinkhorn_eps + 1e-8))
-            Q = Q / (Q.sum() + 1e-8)
-            r = torch.ones(M, device=Q.device) / M
-            c = torch.ones(K, device=Q.device) / K
-            for _ in range(self.sinkhorn_iters):
-                Q = Q / (Q.sum(dim=1, keepdim=True) + 1e-12)
-                Q = Q * r.unsqueeze(1)
-                Q = Q / (Q.sum(dim=0, keepdim=True) + 1e-12)
-                Q = Q * c.unsqueeze(0)
-            # Now Q is [M, K]
-        else:
-            # simple softmax along K
-            Q = F.softmax(logits, dim=1)  # [M, K]
+        # 归一化方向
+        features_dir = F.normalize(features, dim=-1)
+        proto_dir = F.normalize(self.prototypes.data, dim=-1)
 
-        weight_sum = Q.sum(dim=0, keepdim=True).t()  # [K, 1]
-        proto_new = (Q.t() @ features)  # [K, D]
-        denom = weight_sum + self.eps
-        proto_new = proto_new / denom  # [K, D] (if some proto got zero mass, remains small)
+        # 获取每个样本的真实类别
+        labels = labels.long().view(-1)  # [B]
 
-        # EMA update on prototypes
-        gamma = self.gamma_proto
-        updated = gamma * self.prototypes.data + (1.0 - gamma) * proto_new
-        # Normalize updated prototypes to unit vectors (since we compare by cosine)
-        updated = F.normalize(updated, dim=-1)
-        self.prototypes.data.copy_(updated)
+        # 初始化新原型
+        proto_new = torch.zeros_like(self.prototypes.data)
 
-    # (Optional) helper to compute anomaly score directly (energy)
-    def score(self, x: torch.Tensor):
-        self.eval()
-        with torch.no_grad():
-            return self.forward(x, labels=None)
+        for c in range(self.num_class):
+            # 找出属于类别 c 的样本
+            mask = (labels == c)
+            if mask.sum() == 0:
+                proto_new[c * self.k : (c+1) * self.k] = self.prototypes.data[c * self.k : (c+1) * self.k]
+                continue
+
+            # 这些样本只与类别 c 的原型交互
+            feat_subset = features_dir[mask]  # [N_c, D]
+            proto_subset_dir = proto_dir[c * self.k : (c+1) * self.k]  # [k, D]
+
+            # 计算分配权重 Q: [N_c, k]
+            
+            Q = torch.softmax(feat_subset @ proto_subset_dir.t(), dim=1)  # 可加温度
+
+            # 用原始 features（非归一化）更新
+            feat_raw_subset = features[mask]  # [N_c, D]
+            # 计算每个原型的总接收权重（列和）
+            weight_sum = Q.sum(dim=0, keepdim=True)  # [1, k]
+
+            # 加权平均：避免幅值放大
+            proto_updated = (Q.t() @ feat_raw_subset) / (weight_sum.t() + 1e-8)  # [k, D]
+
+            proto_new[c * self.k : (c+1) * self.k] = proto_updated
+
+        # EMA update
+        self.prototypes.data.copy_(gamma * self.prototypes.data + (1 - gamma) * proto_new)
+
+
+
+    def diversity_loss(self):
+        """计算类内原型多样性损失（鼓励同类原型彼此不同）"""
+        loss = 0.0
+        for c in range(self.num_class):
+            start = c * self.k
+            end = start + self.k
+            proto_class = self.prototypes[start:end]  # [k, D]
+            # 计算余弦相似度矩阵 [k, k]
+            sim = torch.mm(proto_class, proto_class.t())  # 已归一化，即余弦相似度
+            # 目标：非对角线元素趋近于0，对角线为1
+            target = torch.eye(self.k, device=sim.device)
+            loss += F.mse_loss(sim, target)
+        return loss / self.num_class  # 平均每类损失

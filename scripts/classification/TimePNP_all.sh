@@ -9,16 +9,17 @@ python -u run.py \
   --model_id ArticularyWordRecognition \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -27,16 +28,17 @@ python -u run.py \
   --model_id AtrialFibrillation \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0001 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -45,16 +47,17 @@ python -u run.py \
   --model_id BasicMotions \
   --model TimePNP \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 # python -u run.py \
 #   --task_name classification \
@@ -63,16 +66,17 @@ python -u run.py \
 #   --model_id CharacterTrajectories \
 #   --model $model_name \
 #   --data UEA \
-#   --e_layers 3 \
+#   --e_layers 2 \
+  --dropout 0.2 \
 #   --batch_size 32 \
 #   --d_model 128 \
 #   --d_ff 256 \
 #   --top_k 3 \
 #   --des 'Exp' \
 #   --itr 1 \
-#   --learning_rate 0.001 \
-#   --train_epochs 200 \
-#   --patience 20
+#   --learning_rate 0.0005 \
+#   --train_epochs 150 \
+#   --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -81,16 +85,17 @@ python -u run.py \
   --model_id Cricket \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -99,16 +104,17 @@ python -u run.py \
   --model_id DuckDuckGeese \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -117,16 +123,17 @@ python -u run.py \
   --model_id EigenWorms \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -135,16 +142,17 @@ python -u run.py \
   --model_id Epilepsy \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -153,16 +161,17 @@ python -u run.py \
   --model_id ERing \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -171,16 +180,17 @@ python -u run.py \
   --model_id EthanolConcentration \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -189,16 +199,17 @@ python -u run.py \
   --model_id FaceDetection \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -207,16 +218,17 @@ python -u run.py \
   --model_id FingerMovements \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -225,16 +237,17 @@ python -u run.py \
   --model_id HandMovementDirection \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -243,16 +256,17 @@ python -u run.py \
   --model_id Handwriting \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.003 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -261,16 +275,17 @@ python -u run.py \
   --model_id Heartbeat \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -279,16 +294,17 @@ python -u run.py \
   --model_id InsectWingbeat \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -297,16 +313,17 @@ python -u run.py \
   --model_id JapaneseVowels \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -315,16 +332,17 @@ python -u run.py \
   --model_id Libras \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -333,16 +351,17 @@ python -u run.py \
   --model_id LSST \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -351,16 +370,17 @@ python -u run.py \
   --model_id MotorImagery \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -369,16 +389,17 @@ python -u run.py \
   --model_id NATOPS \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -387,16 +408,17 @@ python -u run.py \
   --model_id PEMS-SF \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -405,16 +427,17 @@ python -u run.py \
   --model_id PenDigits \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -423,16 +446,17 @@ python -u run.py \
   --model_id PhonemeSpectra \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -441,16 +465,17 @@ python -u run.py \
   --model_id RacketSports \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -459,16 +484,17 @@ python -u run.py \
   --model_id SelfRegulationSCP1 \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -477,16 +503,17 @@ python -u run.py \
   --model_id SelfRegulationSCP2 \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -495,16 +522,17 @@ python -u run.py \
   --model_id SpokenArabicDigits \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -513,16 +541,17 @@ python -u run.py \
   --model_id StandWalkJump \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -531,13 +560,14 @@ python -u run.py \
   --model_id UWaveGestureLibrary \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --batch_size 32 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+  --learning_rate 0.0005 \
+  --train_epochs 150 \
+  --patience 30

@@ -8,7 +8,12 @@ import math
 
 from layers.mona import MonaFeatureExtractor
 
-    
+# --- keep FFTFrequencyWeight, ViTPatchEmbedding, PatchEmbedding, TransformerBackbone mostly the same ---
+# (I reuse your original implementations; omit here to avoid redundancy in this message.
+#  Assume they are identical to what you pasted, except TransformerBackbone no longer calls proto_attn.)
+# --------------------------------------------------------------------
+
+# energy and prototype utilities
 class PrototypeCrossAttention(nn.Module):
     """
     Prototype Cross-Attention with Transformer-style residual connection and LayerNorm.
@@ -220,11 +225,8 @@ class PatchEmbedding(nn.Module):
         return x
 
 
-# ----------------------------
-# Transformer Backbone with Channel-Independent Patching
-# ----------------------------
 class TransformerBackbone(nn.Module):
-    def __init__(self, config: Dict[str, Any], prototypes: Optional[nn.Parameter] = None):
+    def __init__(self, config: Dict[str, Any]):
         super().__init__()
         self.enc_in = config.d_model
         self.seq_len = config.seq_len
@@ -232,6 +234,7 @@ class TransformerBackbone(nn.Module):
         self.num_heads = config.n_heads
         self.num_layers = config.e_layers
         self.dropout = config.dropout
+        self.proto=config.optimizing_prototypes
 
         self.use_patch = getattr(config, "use_patch", 0)
         self.patch_size = getattr(config, "patch_size", 16)
@@ -265,7 +268,11 @@ class TransformerBackbone(nn.Module):
             nn.init.normal_(self.pos_encoding, std=0.02)
 
         # [CLS] token
-        self.use_cls_token = True
+        if(config.task_name=='anomaly_detection'):
+            self.use_cls_token = False
+        else:
+            self.use_cls_token = True
+
         if self.use_cls_token:
             self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
             nn.init.normal_(self.cls_token, std=0.02)
@@ -319,15 +326,18 @@ class TransformerBackbone(nn.Module):
         x = self.norm(x)
 
         # # ✅ Cross-attention with prototypes
-        x = self.proto_attn(x, prototypes)
+        # if(self.proto):
+        #     x = self.proto_attn(x, prototypes)
+            # x = self.proto_attn(x, prototypes)
 
         # Extract CLS and aggregate
-        cls_tokens = x[:, 0]
+        if self.use_cls_token:
+            x = x[:, 0]
         if self.use_patch == 1:
-            cls_tokens = cls_tokens.view(B, C, self.embed_dim)
+            cls_tokens = x.view(B, C, self.embed_dim)
             cls_final = cls_tokens.mean(dim=1)
         else:
-            cls_final = cls_tokens
+            cls_final = x
 
         return cls_final
 
@@ -336,125 +346,101 @@ class Model(nn.Module):
         super().__init__()
         self.enc_in = config.enc_in
         self.seq_len = config.seq_len
-        self.num_class = config.num_class
+        self.num_class = getattr(config, "num_class", None)
         self.embed_dim = config.d_model
-        self.temperature = getattr(config, "temperature", 0.2)
-        self.gamma = getattr(config, "gamma", 0.99)
+        self.temperature = getattr(config, "temperature", 0.1)  # for energy
+        self.gamma_proto = getattr(config, "proto_ema_gamma", 0.999)
         self.k = getattr(config, "k", 5)
-        self.n_prototypes_total = min(self.k * self.num_class, 200) 
-        self.feature_extractor=MonaFeatureExtractor(self.enc_in,self.embed_dim)
+        self.n_prototypes_total = getattr(config, "n_prototypes_total", 80)
 
+        # Feature extractor (you had MonaFeatureExtractor)
+        self.feature_extractor = MonaFeatureExtractor(self.enc_in, self.embed_dim)
 
-        # New: Scalable loss config
-        self.use_scalenorm = getattr(config, "use_scalenorm", False)
-        self.scalable_alpha = getattr(config, "scalable_alpha", 1.0)
-        self.scalable_gamma = getattr(config, "scalable_gamma", 2.0)
+        # Backbone - reuse TransformerBackbone but we removed proto_attn call
+        self.backbone = TransformerBackbone(config)
 
-        # Backbone
-        self.backbone =TransformerBackbone(config)
-
-        # Prototypes
+        # prototypes
         self.prototypes = nn.Parameter(torch.randn(self.n_prototypes_total, self.embed_dim))
         nn.init.xavier_normal_(self.prototypes)
-        self.prototypes.data = F.normalize(self.prototypes.data, dim=-1)
+        # normalize initially (always keep prototypes normalized for cosine usage)
+        with torch.no_grad():
+            self.prototypes.data = F.normalize(self.prototypes.data, dim=-1)
 
-        self.relu=nn.ReLU()
+        # Regularization weights
+        self.optimizing_prototypes=config.optimizing_prototypes
+        self.use_sinkhorn = getattr(config, "use_sinkhorn", True)
+        self.sinkhorn_iters = getattr(config, "sinkhorn_iters", 3)
+        self.sinkhorn_eps = getattr(config, "sinkhorn_eps", 0.05)
+        self.classifier = nn.Linear(self.embed_dim, self.enc_in, bias=True)
 
-        self.optimizing_prototypes = True
-        self.classifier=ScoreAggregation(self.n_prototypes_total,self.num_class)
-        self.dB=1
+        # for numerical stability
+        self.eps = 1e-6
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        _a=None,
-        labels: Optional[torch.Tensor] = None,
-        _b=None,
-        return_sim_maps: bool = False,
-    ):
-        #input=[B,L,C]
+    def forward(self, x, _a=None, labels: Optional[Tensor] = None, _b=None, return_sim_maps: bool = False):
         x1 = self.feature_extractor(x.transpose(1, 2))
         x = x1.transpose(1, 2)
 
-        observed_mask = torch.ones_like(x)  # 假设所有数据有效（实际场景可传入真实掩码）
 
-        # Step 2: （可选）ScaleNorm归一化
-        if self.use_scalenorm:
-            scaled_x, _, _ = self.scaler(x, observed_mask)
-        else:
-            scaled_x = x  # 不归一化，直接使用原始数据
-            
+        scaled_x = x
+
         if scaled_x.shape[1] != self.backbone.enc_in:
-            x = scaled_x.transpose(1, 2)  # to [B, C, L]
-        
-        features = self.backbone(x,self.prototypes)  # [B, D]
-        features = F.normalize(features, p=2, dim=-1)
-        prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
+            x = scaled_x.transpose(1, 2)
 
-        logits = torch.mm(features, prototypes_norm.t())  # [B, K]
+        features = self.backbone(x, self.prototypes)
+        features = F.normalize(features, p=2, dim=-1)
 
         if self.training and self.optimizing_prototypes:
-            self._update_prototypes(features)
-        class_logits = self.classifier(logits)  # [B, num_class]
-        return class_logits
+            feature=features.mean(dim=1)
+            self._update_prototypes(feature)
+        return self.classifier(features)
 
     @torch.no_grad()
-    def _update_prototypes(
-        self,
-        features,           # [B, D] ← 原始特征（保留幅值）
-        sinkhorn_iters=3,
-        sinkhorn_eps=0.05,  # Sinkhorn 正则化强度
-        eps=1e-6
-    ):
-        B, D = features.shape
-        gamma = 0.999
+    def _update_prototypes(self, features: torch.Tensor):
+        """
+        Update prototypes with features (features should be normalized already)
+        features: [M, D]  (M may be < B)
+        Algorithm:
+            - Option A: simple soft-assignment (softmax over cos sims) -> weighted sum
+            - Option B: Sinkhorn balanced assignment (optional)
+            - EMA update with gamma_proto
+            - Normalize prototypes after update
+        """
+        M, D = features.shape
+        K = self.n_prototypes_total
+        proto_dir = F.normalize(self.prototypes.data, dim=-1)  # [K, D]
+        logits = features @ proto_dir.t()  # [M, K]
 
-        # 1. 归一化特征用于 Sinkhorn 分配（仅方向）
-        features_dir = F.normalize(features, dim=-1)          # [B, D]
-        proto_dir = F.normalize(self.prototypes.data, dim=-1) # [K, D]
-        logits = features_dir @ proto_dir.t()                 # [B, K]
-
-        # 2. Sinkhorn 平衡分配（所有样本 ↔ 所有原型）
-        def sinkhorn(Q, n_iters=sinkhorn_iters, eps=sinkhorn_eps):
-            # 熵正则化 Sinkhorn: min -<Q, logits> + eps * KL(Q || 1)
-            Q = torch.exp(logits / eps)  # 初始化为 softmax(logits/eps)
-            Q = Q / Q.sum()              # 归一化
-
-            r = torch.ones(B, device=Q.device) / B  # 行约束（均匀）
-            c = torch.ones(self.n_prototypes_total, device=Q.device) / self.n_prototypes_total  # 列约束（均匀）
-
-            for _ in range(n_iters):
-                Q = Q / (Q.sum(dim=1, keepdim=True) + eps)  # 行归一化
+        # soft assignment
+        if self.use_sinkhorn and M >= K:
+            # Sinkhorn-like balanced assignment over the selected subset
+            Q = torch.exp(logits / (self.sinkhorn_eps + 1e-8))
+            Q = Q / (Q.sum() + 1e-8)
+            r = torch.ones(M, device=Q.device) / M
+            c = torch.ones(K, device=Q.device) / K
+            for _ in range(self.sinkhorn_iters):
+                Q = Q / (Q.sum(dim=1, keepdim=True) + 1e-12)
                 Q = Q * r.unsqueeze(1)
-                Q = Q / (Q.sum(dim=0, keepdim=True) + eps)  # 列归一化
+                Q = Q / (Q.sum(dim=0, keepdim=True) + 1e-12)
                 Q = Q * c.unsqueeze(0)
-            return Q
+            # Now Q is [M, K]
+        else:
+            # simple softmax along K
+            Q = F.softmax(logits, dim=1)  # [M, K]
 
-        Q = sinkhorn(logits)  # [B, K] ← 平衡分配矩阵
+        weight_sum = Q.sum(dim=0, keepdim=True).t()  # [K, 1]
+        proto_new = (Q.t() @ features)  # [K, D]
+        denom = weight_sum + self.eps
+        proto_new = proto_new / denom  # [K, D] (if some proto got zero mass, remains small)
 
-        # 3. 用原始 features（保留幅值）更新原型
-        feat_raw = features  # [B, D] ← 关键：非归一化！
-
-        # 4. 加权平均更新（避免幅值放大）
-        weight_sum = Q.sum(dim=0, keepdim=True)  # [1, K]
-        proto_new = (Q.t() @ feat_raw) / (weight_sum.t() + eps)  # [K, D]
-
-        # 5. EMA 更新（不强制归一化，保留幅值）
-        updated = gamma * self.prototypes.data + (1 - gamma) * proto_new
+        # EMA update on prototypes
+        gamma = self.gamma_proto
+        updated = gamma * self.prototypes.data + (1.0 - gamma) * proto_new
+        # Normalize updated prototypes to unit vectors (since we compare by cosine)
+        updated = F.normalize(updated, dim=-1)
         self.prototypes.data.copy_(updated)
 
-
-
-    def diversity_loss(self):
-        """计算类内原型多样性损失（鼓励同类原型彼此不同）"""
-        loss = 0.0
-        for c in range(self.num_class):
-            start = c * self.k
-            end = start + self.k
-            proto_class = self.prototypes[start:end]  # [k, D]
-            # 计算余弦相似度矩阵 [k, k]
-            sim = torch.mm(proto_class, proto_class.t())  # 已归一化，即余弦相似度
-            # 目标：非对角线元素趋近于0，对角线为1
-            target = torch.eye(self.k, device=sim.device)
-            loss += F.mse_loss(sim, target)
-        return loss / self.num_class  # 平均每类损失
+    # (Optional) helper to compute anomaly score directly (energy)
+    def score(self, x: torch.Tensor):
+        self.eval()
+        with torch.no_grad():
+            return self.forward(x, labels=None)

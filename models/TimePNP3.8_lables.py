@@ -299,8 +299,8 @@ class TransformerBackbone(nn.Module):
         x = self.norm(x)
 
         # # ✅ Cross-attention with prototypes
-        if(self.proto):
-            x = self.proto_attn(x, prototypes)
+        # if(self.proto):
+        #     x = self.proto_attn(x, prototypes)
             # x = self.proto_attn(x, prototypes)
 
         # Extract CLS and aggregate

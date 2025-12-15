@@ -9,7 +9,7 @@ python -u run.py \
   --model_id EthanolConcentration \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \
@@ -27,7 +27,7 @@ python -u run.py \
   --model_id FaceDetection \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \
@@ -45,7 +45,7 @@ python -u run.py \
   --model_id Handwriting \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \
@@ -63,7 +63,7 @@ python -u run.py \
   --model_id Heartbeat \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \
@@ -81,7 +81,7 @@ python -u run.py \
   --model_id JapaneseVowels \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \
@@ -99,7 +99,7 @@ python -u run.py \
   --model_id PEMS-SF \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \
@@ -117,7 +117,7 @@ python -u run.py \
   --model_id SelfRegulationSCP1 \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \
@@ -135,7 +135,7 @@ python -u run.py \
   --model_id SelfRegulationSCP2 \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --patch_len 16 \
   --d_model 128 \
@@ -154,7 +154,7 @@ python -u run.py \
   --model_id SpokenArabicDigits \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \
@@ -172,7 +172,7 @@ python -u run.py \
   --model_id UWaveGestureLibrary \
   --model $model_name \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 16 \
   --d_model 128 \
   --d_ff 256 \

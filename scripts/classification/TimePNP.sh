@@ -22,24 +22,24 @@ python -u run.py \
   --patience 30 \
   --warm_up 3 
 
-python -u run.py \
-  --task_name classification \
-  --is_training 1 \
-  --root_path /root/data/UEA/FaceDetection/ \
-  --model_id FaceDetection \
-  --model $model_name \
-  --data UEA \
-  --e_layers 3 \
-  --batch_size 32 \
-  --dropout 0.2 \
-  --d_model 128 \
-  --d_ff 256 \
-  --top_k 3 \
-  --des 'Exp' \
-  --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 200 \
-  --patience 20
+# python -u run.py \
+#   --task_name classification \
+#   --is_training 1 \
+#   --root_path /root/data/UEA/FaceDetection/ \
+#   --model_id FaceDetection \
+#   --model $model_name \
+#   --data UEA \
+#   --e_layers 3 \
+#   --batch_size 32 \
+#   --dropout 0.2 \
+#   --d_model 128 \
+#   --d_ff 256 \
+#   --top_k 3 \
+#   --des 'Exp' \
+#   --itr 1 \
+#   --learning_rate 0.001 \
+#   --train_epochs 200 \
+#   --patience 20
 
 python -u run.py \
   --task_name classification \

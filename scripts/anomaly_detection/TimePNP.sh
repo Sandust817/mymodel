@@ -12,7 +12,8 @@ python -u run.py \
   --pred_len 0 \
   --d_model 128 \
   --d_ff 128 \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --enc_in 55 \
   --c_out 55 \
   --anomaly_ratio 1 \
@@ -33,7 +34,8 @@ python -u run.py \
   --pred_len 0 \
   --d_model 128 \
   --d_ff 128 \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --enc_in 25 \
   --c_out 25 \
   --anomaly_ratio 0.5 \
@@ -55,7 +57,8 @@ python -u run.py \
   --pred_len 0 \
   --d_model 128 \
   --d_ff 128 \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --enc_in 25 \
   --c_out 25 \
   --anomaly_ratio 1 \
@@ -78,7 +81,8 @@ python -u run.py \
   --pred_len 0 \
   --d_model 128 \
   --d_ff 128 \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --enc_in 38 \
   --c_out 38 \
   --anomaly_ratio 0.5 \
@@ -101,7 +105,8 @@ python -u run.py \
   --pred_len 0 \
   --d_model 128 \
   --d_ff 128 \
-  --e_layers 3 \
+  --e_layers 2 \
+  --dropout 0.2 \
   --enc_in 51 \
   --c_out 51 \
   --anomaly_ratio 1 \
