@@ -1,6 +1,6 @@
 export CUDA_VISIBLE_DEVICES=0
 
-model_name=PatchTST
+model_name=SoftShape
 
 python -u run.py \
   --task_name classification \
@@ -10,15 +10,16 @@ python -u run.py \
   --model $model_name \
   --data UEA \
   --e_layers 2 \
-  --batch_size 16 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 100 \
-  --patience 10
+  --learning_rate 0.0001 \
+  --train_epochs 200 \
+  --patience 30
 
 python -u run.py \
   --task_name classification \
@@ -27,8 +28,9 @@ python -u run.py \
   --model_id FaceDetection \
   --model $model_name \
   --data UEA \
-  --e_layers 2 \
-  --batch_size 16 \
+  --e_layers 3 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
@@ -43,18 +45,19 @@ python -u run.py \
   --is_training 1 \
   --root_path /root/data/UEA/Handwriting/ \
   --model_id Handwriting \
-  --model TimeMIL \
+  --model $model_name \
   --data UEA \
   --e_layers 2 \
-  --batch_size 16 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 100 \
-  --patience 10
+  --learning_rate 0.003 \
+  --train_epochs 200 \
+  --patience 40
 
 python -u run.py \
   --task_name classification \
@@ -64,7 +67,8 @@ python -u run.py \
   --model $model_name \
   --data UEA \
   --e_layers 2 \
-  --batch_size 16 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
@@ -82,7 +86,8 @@ python -u run.py \
   --model $model_name \
   --data UEA \
   --e_layers 2 \
-  --batch_size 16 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
@@ -100,7 +105,8 @@ python -u run.py \
   --model $model_name \
   --data UEA \
   --e_layers 2 \
-  --batch_size 16 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
@@ -118,15 +124,16 @@ python -u run.py \
   --model $model_name \
   --data UEA \
   --e_layers 2 \
-  --batch_size 16 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 100 \
-  --patience 10
+  --learning_rate 0.0001 \
+  --train_epochs 200 \
+  --patience 20
 
 python -u run.py \
   --task_name classification \
@@ -136,8 +143,8 @@ python -u run.py \
   --model $model_name \
   --data UEA \
   --e_layers 2 \
-  --batch_size 16 \
-  --patch_len 16 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
@@ -155,15 +162,16 @@ python -u run.py \
   --model $model_name \
   --data UEA \
   --e_layers 2 \
-  --batch_size 16 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.001 \
-  --train_epochs 100 \
-  --patience 10
+  --learning_rate 0.0002 \
+  --train_epochs 200 \
+  --patience 20
 
 python -u run.py \
   --task_name classification \
@@ -173,7 +181,8 @@ python -u run.py \
   --model $model_name \
   --data UEA \
   --e_layers 2 \
-  --batch_size 16 \
+  --batch_size 32 \
+  --dropout 0.2 \
   --d_model 128 \
   --d_ff 256 \
   --top_k 3 \

@@ -309,9 +309,9 @@ class Model(nn.Module):
         self.dB=1
 
         # 原型参数初始化
-        self.k_levels = getattr(config, "k_levels",[2,3])  # 从config读取不定长数组，也可直接赋值如 [2,3]
+        self.k_levels = getattr(config, "k_levels",[3,4])  # 从config读取不定长数组，也可直接赋值如 [2,3]
         self.counts = [self.num_class * k for k in self.k_levels]  
-        self.weights=[0.1,0.25]
+        self.weights=[0.1,0.2]
 
         # 2. 动态生成对应层数的原型参数（核心优化：适配不定长k_levels）
         self.prototype_layers = nn.ParameterList()  # 使用nn.ParameterList管理多个原型层
@@ -326,12 +326,12 @@ class Model(nn.Module):
         if self.optimizing_prototypes:
             self.classifier = ScoreAggregation(self.n_prototypes_total, self.num_class)
             # 初始化集成 Loss 模块
-            # self.criterion = IntegratedPrototypeLoss(
-            #     self.n_prototypes_total, 
-            #     self.num_class, 
-            #     alpha=getattr(config, "proto_alpha", 0.5),
-            #     beta=getattr(config, "proto_beta", 0.1)
-            # )
+            self.criterion = IntegratedPrototypeLoss(
+                self.n_prototypes_total, 
+                self.num_class, 
+                alpha=getattr(config, "proto_alpha", 0.5),
+                beta=getattr(config, "proto_beta", 0.1)
+            )
         else:
             self.classifier = nn.Linear(self.embed_dim, self.num_class)
 
@@ -453,28 +453,6 @@ class Model(nn.Module):
 
         return proto_new, proto_class_centers
 
-    def _get_warmup_gamma(self, current_step, warm_up_steps=3, active_steps=10):
-        """
-        current_step: 这里的 self.dB
-        warm_up_steps: 前期冻结步数
-        active_steps: 中期允许快速演化的步数
-        """
-        if current_step < warm_up_steps:
-            # 第一阶段：高 Gamma (1.0)，原型不动，作为稳定锚点
-            return 1.0
-        
-        elif current_step < (warm_up_steps + active_steps):
-            # 第二阶段：降低 Gamma，允许原型向特征中心靠拢
-            # 采用余弦或线性插值从 1.0 降到 0.95
-            progress = (current_step - warm_up_steps) / active_steps
-            return 1.0 - (1.0 - 0.99) * progress 
-        
-        else:
-            # 第三阶段：再次升高并锁定
-            # 从 0.95 缓慢升至 0.999
-            return 0.99 + (0.999 - 0.99) * (1.0 - math.exp(-(current_step - warm_up_steps - active_steps) / 10))
-
-
     @torch.no_grad()
     def _update_all_hierarchy(self, features, labels,update_alpha=0.5):
         """
@@ -484,11 +462,9 @@ class Model(nn.Module):
         3.  所有层级最终执行EMA平滑更新
         """
         # 1. 计算EMA更新系数（保持你原始逻辑）
-
-        gamma = self._get_warmup_gamma(self.dB)
+        gamma = 0.9 + (0.999 - 0.9) * math.exp(-self.dB / 100)
         self.dB += 1
-        # if self.dB < 10:
-        #     continue
+
         # 存储每层原型的类内均值（用于约束上一层）
         layer_class_centers = []
         num_layers = len(self.prototype_layers)

@@ -167,7 +167,7 @@ if __name__ == '__main__':
                         help="Discrimitive shapeDTW warp preset augmentation")
     parser.add_argument('--extra_tag', type=str, default="", help="Anything extra")
     parser.add_argument('--K', type=int, default=5, help="K")
-    parser.add_argument('--warm_up', type=int, default=3)
+    parser.add_argument('--warm_up', type=int, default=0)
     parser.add_argument('--use_cls', type=bool, default=True)
     parser.add_argument('--optimizing_prototypes', type=bool, default=True)
     # optimizing_prototypes

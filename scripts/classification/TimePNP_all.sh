@@ -12,7 +12,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -20,6 +20,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -31,7 +32,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -39,6 +40,7 @@ python -u run.py \
   --learning_rate 0.0001 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -50,7 +52,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -58,6 +60,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 # python -u run.py \
 #   --task_name classification \
@@ -67,9 +70,8 @@ python -u run.py \
 #   --model $model_name \
 #   --data UEA \
 #   --e_layers 2 \
-  --dropout 0.2 \
 #   --batch_size 32 \
-#   --d_model 128 \
+#   --d_model 32 \
 #   --d_ff 256 \
 #   --top_k 3 \
 #   --des 'Exp' \
@@ -88,7 +90,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -96,6 +98,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -107,7 +110,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -115,6 +118,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -126,7 +130,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 16 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -134,6 +138,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -145,7 +150,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -153,6 +158,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -164,7 +170,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -172,6 +178,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -183,7 +190,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -191,6 +198,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -202,7 +210,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -210,6 +218,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -221,7 +230,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -229,6 +238,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -240,7 +250,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -248,6 +258,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -259,7 +270,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -267,6 +278,7 @@ python -u run.py \
   --learning_rate 0.003 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -278,7 +290,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -286,6 +298,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -297,7 +310,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -305,6 +318,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -316,7 +330,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -324,6 +338,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -335,7 +350,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -343,6 +358,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -354,7 +370,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -362,6 +378,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -373,7 +390,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -381,6 +398,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -392,7 +410,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -400,6 +418,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -411,7 +430,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -419,6 +438,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -430,7 +450,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -438,6 +458,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -449,7 +470,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -457,6 +478,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -468,7 +490,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -476,6 +498,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -487,7 +510,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -495,6 +518,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -506,7 +530,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -514,6 +538,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -525,7 +550,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -533,6 +558,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -544,7 +570,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -552,6 +578,7 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+
 
 python -u run.py \
   --task_name classification \
@@ -563,7 +590,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 128 \
+  --d_model 32 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -571,3 +598,4 @@ python -u run.py \
   --learning_rate 0.0005 \
   --train_epochs 150 \
   --patience 30
+

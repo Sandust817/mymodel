@@ -8,7 +8,7 @@ import os
 import time
 import warnings
 import numpy as np
-
+import random
 import pytz
 import datetime
 import torch.nn.functional as F
@@ -197,10 +197,23 @@ class Exp_Classification(Exp_Basic):
                 batch_x = batch_x.float().to(self.device)
                 padding_mask = padding_mask.float().to(self.device)
                 label = label.to(self.device)
-
-                outputs = self.model(batch_x, padding_mask, None, None)
-                pred = outputs.detach()
-                loss = criterion(pred, label.long().squeeze(-1))
+                if(self.args.model=="SoftShape"):
+                    outputs,loss = self.model(batch_x, padding_mask, label,None)
+                    loss =0.001*loss+ criterion(outputs, label.long().squeeze(-1))
+                    outputs = self.model(batch_x, padding_mask, label,None)
+                elif(self.args.model=="TimePNP"):
+                    outputs= self.model(batch_x, padding_mask, label,None)
+                    loss = criterion(outputs, label.long().squeeze(-1))
+                elif(self.args.model=="TimeMIL"):
+                    # selecy_window_indx = random.sample(range(10),int(5))
+                    # inteval = int(len(batch_x)//10)
+                    # for idx in selecy_window_indx:
+                    #     batch_x[:,idx*inteval:idx*inteval+inteval,:] = torch.randn(1).cuda()
+                    outputs = self.model(batch_x, padding_mask, label,None)
+                    loss = criterion(outputs, label.long().squeeze(-1))
+                else:
+                    outputs = self.model(batch_x, padding_mask, label,None)
+                    loss = criterion(outputs, label.long().squeeze(-1))
                 total_loss.append(loss.item())
 
                 preds.append(outputs.detach())
@@ -264,14 +277,24 @@ class Exp_Classification(Exp_Basic):
                 batch_x = batch_x.float().to(self.device)
                 padding_mask = padding_mask.float().to(self.device)
                 label = label.to(self.device)
-                outputs = self.model(batch_x, padding_mask, label,epoch)
-                loss = criterion(outputs, label.long().squeeze(-1))
-                if self.model.optimizing_prototypes:
-                    try:
-                        None
-                        # loss+=self.model.diversity_loss()*0.1
-                    except:
-                        loss+=self.model.projection.diversity_loss()
+                if(self.args.model=="SoftShape"):
+                    outputs,loss = self.model(batch_x, padding_mask, label,epoch)
+                    loss =0.001*loss+ criterion(outputs, label.long().squeeze(-1))
+                    outputs = self.model(batch_x, padding_mask, label,epoch)
+                elif(self.args.model=="TimePNP"):
+                    outputs,loss = self.model(batch_x, padding_mask, label,epoch)
+                    # loss=self.model.get_loss(outputs,label.long().squeeze(-1))
+                    loss += criterion(outputs, label.long().squeeze(-1))
+                elif(self.args.model=="TimeMIL"):
+                    selecy_window_indx = random.sample(range(10),int(5))
+                    inteval = int(len(batch_x)//10)
+                    for idx in selecy_window_indx:
+                        batch_x[:,idx*inteval:idx*inteval+inteval,:] = torch.randn(1).cuda()
+                    outputs = self.model(batch_x, padding_mask, label, None,warmup=True if i>10 else False)
+                    loss = criterion(outputs, label.long().squeeze(-1))
+                else:
+                    outputs = self.model(batch_x, padding_mask, label,epoch)
+                    loss = criterion(outputs, label.long().squeeze(-1))
                     # print("####")
                 train_loss.append(loss.item())
 
@@ -386,12 +409,14 @@ class Exp_Classification(Exp_Basic):
                 batch_x = batch_x.float().to(self.device)
                 padding_mask = padding_mask.float().to(self.device)
                 label = label.to(self.device)
-
-                outputs = self.model(batch_x, padding_mask, None, None)
-
+                if(self.args.model=="SoftShape"):
+                    outputs,_ = self.model(batch_x, padding_mask, label,None)
+                    outputs = self.model(batch_x, padding_mask, label,epoch)
+                else:
+                    outputs = self.model(batch_x, padding_mask, label,None)
                 preds.append(outputs.detach())
                 trues.append(label)
-
+        # print(preds[0])
         preds = torch.cat(preds, 0)
         trues = torch.cat(trues, 0)
         print('test shape:', preds.shape, trues.shape)

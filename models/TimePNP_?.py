@@ -8,43 +8,110 @@ import math
 
 from layers.mona import MonaFeatureExtractor
 
-class ScoreAggregation(nn.Module):
-
-    def __init__(self, n_prototypes_total: int,num_classes: int,  init_val: float = 0.2, temperature: float = 0.1):
+    
+class ContextPrototypes(nn.Module):
+    def __init__(self, num_proto, dim):
         super().__init__()
-        # 核心：计算每个类别对应的原型数量（确保 n_prototypes_total 是 num_classes 的整数倍）
-        assert n_prototypes_total % num_classes == 0, "原型总数必须是类别数的整数倍"
-        self.k = n_prototypes_total // num_classes  # 每个类别对应 k 个原型
+        directions = F.normalize(torch.randn(num_proto, dim), dim=-1)
+        # 初始化幅值（例如 0.5）
+        magnitudes = torch.full((num_proto, 1), 1.0)
+        prototypes = directions * magnitudes
+        self.prototypes = nn.Parameter(prototypes)
+
+class PrototypeCrossAttention(nn.Module):
+    """
+    Prototype Cross-Attention with Transformer-style residual connection and LayerNorm.
+    Structure: x + Dropout(Attention(LayerNorm(x), prototypes))
+    """
+    def __init__(self, embed_dim: int, num_heads: int,num_proto, dropout: float = 0.2):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
         
-        # 可学习权重：[num_classes, k]，每个类别下的 k 个原型各有一个权重
-        self.weights = nn.Parameter(
-            torch.full((num_classes, self.k), init_val, dtype=torch.float32)
+        # LayerNorm before attention (like norm_first=True in Transformer)
+        self.context_proto = ContextPrototypes(num_proto, embed_dim)
+        self.norm_x = nn.LayerNorm(embed_dim)
+        self.norm_p = nn.LayerNorm(embed_dim)
+        
+        # Multihead cross-attention: queries from x, keys/values from prototypes
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True
         )
-        self.temperature = temperature  # 权重归一化的温度系数，控制权重差异度
+        self.alpha = nn.Parameter(torch.tensor(0.2))  # 关键！
+        
+        # Dropout for residual connection
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        """
+        x: [B, L, D]
+        """
+        B, L, D = x.shape
+
+        x_norm = self.norm_x(x)
+        proto = self.norm_p(self.context_proto.prototypes)
+        proto = proto.unsqueeze(0).expand(B, -1, -1)
+
+        attn_out, _ = self.cross_attn(
+            query=x_norm,
+            key=proto,
+            value=proto
+        )
+
+        return x +attn_out
+
+class PrototypeBlock(nn.Module):
+    """
+    Proto-Attention + FFN block (Pre-Norm)
+    """
+    def __init__(self, embed_dim, num_heads, num_proto, dropout=0.2, ffn_ratio=4):
+        super().__init__()
+
+        self.proto_attn = PrototypeCrossAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            num_proto=num_proto,
+            dropout=dropout
+        )
+
+        self.norm = nn.LayerNorm(embed_dim)
+
+        hidden_dim = embed_dim * ffn_ratio
+        self.ffn = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, embed_dim),
+            nn.Dropout(dropout),
+        )
+
+        # 控制 prototype 注入强度
+        self.beta = nn.Parameter(torch.zeros(1))
+
+    def forward(self, x):
+        # Proto attention
+        x = self.proto_attn(x)
+
+        # FFN with residual
+        x = x +self.ffn(self.norm(x))
+        return x
+
+
+class ScoreAggregation(nn.Module):
+    def __init__(self, n_prototypes_total: int, num_classes: int, temperature: float = 0.05):
+        super().__init__()
+        assert n_prototypes_total % num_classes == 0
+        self.k = n_prototypes_total // num_classes
+        self.temperature = temperature
 
     def forward(self, prototype_logits: torch.Tensor) -> torch.Tensor:
-
-        num_classes = self.weights.shape[0]
-        B, _ = prototype_logits.shape
-        
-
-        prototype_logits_grouped = prototype_logits.reshape(B, num_classes, self.k)
-
-        normalized_weights = F.softmax(self.weights / self.temperature, dim=-1) * self.k
-
-        class_logits = (prototype_logits_grouped * normalized_weights).sum(dim=-1)
-        
-        return class_logits
+        B, K = prototype_logits.shape
+        logits = prototype_logits.view(B, -1, self.k)  # [B, C, k]
+        return torch.logsumexp(logits / self.temperature, dim=-1)  # [B, C]
     
-def diversity_loss(self):
-    loss = 0
-    for c in range(self.num_class):
-        start = c * self.k
-        end = start + self.k
-        proto_class = self.prototypes[start:end]  # [k, D]
-        sim = torch.mm(proto_class, proto_class.t())  # [k, k]
-        loss += (sim - torch.eye(self.k, device=sim.device)).pow(2).mean()
-    return loss
 # ----------------------------
 # FFT Frequency Weighting Module
 # ----------------------------
@@ -179,31 +246,27 @@ class TransformerBackbone(nn.Module):
     def __init__(self, config: Dict[str, Any]):
         super().__init__()
         self.enc_in = config.d_model
-        self.seq_len = config.seq_len    # sequence length (L)
+        self.seq_len = config.seq_len
         self.embed_dim = config.d_model
         self.num_heads = config.n_heads
         self.num_layers = config.e_layers
         self.dropout = config.dropout
+        self.proto=config.optimizing_prototypes
 
-        # Patching config
-        self.use_patch = getattr(config, "use_patch", 0)#0 no patch,1 PatchTsT,2 Vit
+        self.use_patch = getattr(config, "use_patch", 0)
         self.patch_size = getattr(config, "patch_size", 16)
 
-        # FFT config
+        # FFT frequency weighting
         self.use_fft_weight = getattr(config, "use_fft_weight", True)
         self.fft_weight_type = getattr(config, "fft_weight_type", "learnable")
-
         if self.use_fft_weight:
             self.fft_weight = FFTFrequencyWeight(self.seq_len, self.fft_weight_type)
 
-        # Patch embedding (channel-independent)
-        if self.use_patch==1:
-            self.patch_embed = PatchEmbedding(
-                patch_size=self.patch_size,
-                embed_dim=self.embed_dim
-            )
-            transformer_seq_len = (self.seq_len+self.patch_size-1) // self.patch_size
-        elif self.use_patch==2:
+        # Patching
+        if self.use_patch == 1:
+            self.patch_embed = PatchEmbedding(patch_size=self.patch_size, embed_dim=self.embed_dim)
+            transformer_seq_len = (self.seq_len + self.patch_size - 1) // self.patch_size
+        elif self.use_patch == 2:
             self.patch_embed = ViTPatchEmbedding(
                 seq_len=self.seq_len,
                 patch_size=self.patch_size,
@@ -212,34 +275,36 @@ class TransformerBackbone(nn.Module):
             )
             transformer_seq_len = self.patch_embed.n_patches
         else:
-            # Fallback: standard projection (not recommended for multivariate)
             self.input_proj = nn.Linear(self.enc_in, self.embed_dim)
             transformer_seq_len = self.seq_len
 
-        # Positional encoding (shared across all channels)
+        # Positional encoding
         self.use_pos_encoding = True
         if self.use_pos_encoding:
             self.pos_encoding = nn.Parameter(torch.zeros(1, transformer_seq_len, self.embed_dim))
             nn.init.normal_(self.pos_encoding, std=0.02)
 
-        # [CLS] token per (B*C) — or shared? We'll use shared for efficiency
+        # [CLS] token
         self.use_cls_token = True
         if self.use_cls_token:
             self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
             nn.init.normal_(self.cls_token, std=0.02)
             transformer_seq_len += 1
 
-        # Transformer encoder (shared weights across channels)
+        # Transformer encoder
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.embed_dim,
             nhead=self.num_heads,
-            dim_feedforward=self.embed_dim * 4,
+            dim_feedforward=self.embed_dim * 2,
             dropout=self.dropout,
             batch_first=True,
             norm_first=True,
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=self.num_layers)
         self.norm = nn.LayerNorm(self.embed_dim)
+
+        # ✅ Cross attention to prototypes
+        self.proto_attn = PrototypeBlock(embed_dim=self.embed_dim, num_heads=self.num_heads,num_proto=config.K*config.num_class,dropout=self.dropout)
 
         self._init_weights()
 
@@ -250,54 +315,43 @@ class TransformerBackbone(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, prototypes: torch.Tensor) -> torch.Tensor:
         B, C, L = x.shape
-        assert C == self.enc_in, f"Channel mismatch: {C} vs {self.enc_in}"
-        assert L == self.seq_len, f"Seq len mismatch: {L} vs {self.seq_len}"
-
-        # Apply FFT (optional)
         if self.use_fft_weight:
-            x = self.fft_weight(x)  # [B, C, L]
+            x = self.fft_weight(x)
 
-        # Patching: [B, C, L] → [B*C, n_patches, embed_dim]
-        if self.use_patch!=0:
-            x = self.patch_embed(x)  # [B*C, n_patches, embed_dim]
+        # Patching
+        if self.use_patch != 0:
+            x = self.patch_embed(x)
         else:
-            x = x.transpose(1, 2)  # [B, L, C]
-            x = self.input_proj(x)  # [B, L, embed_dim]
-            # Reshape to [B*C, L, embed_dim//C] is not clean → avoid
-            # So we strongly recommend use_patch=True for multivariate
+            x = x.transpose(1, 2)
+            x = self.input_proj(x)
 
-        # Add positional encoding (broadcast to B*C)
         if self.use_pos_encoding:
-            x = x + self.pos_encoding  # [B*C, n_patches, D]
+            x = x + self.pos_encoding
 
-        # Add [CLS] token (shared across all)
         if self.use_cls_token:
-            cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=x.shape[0])  # [B*C, 1, D]
-            x = torch.cat([cls_tokens, x], dim=1)  # [B*C, n_patches+1, D]
+            cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=x.shape[0])
+            x = torch.cat([cls_tokens, x], dim=1)
 
-        # Transformer
+        # Transformer encoder
         x = self.transformer(x)
         x = self.norm(x)
 
-        # Extract [CLS] tokens: [B*C, D]
-        cls_tokens = x[:, 0]  # [B*C, D]
-        if not self.use_patch==1:
-            return cls_tokens
-        else :
+        # # ✅ Cross-attention with prototypes
+        if(self.proto):
+            x = self.proto_attn(x)
+            # x = self.proto_attn(x)
 
-            # Reshape back to [B, C, D] and aggregate across channels
-            cls_tokens = cls_tokens.view(B, C, self.embed_dim)  # [B, C, D]
-            # Option 1: mean over channels
-            cls_final = cls_tokens.mean(dim=1)  # [B, D]
-            # Option 2: use another linear layer to fuse channels (more powerful)
-            # self.channel_fuse = nn.Linear(C * self.embed_dim, self.embed_dim)
-            # cls_final = self.channel_fuse(cls_tokens.view(B, -1))
+        # Extract CLS and aggregate
+        cls_tokens = x[:, 0]
+        if self.use_patch == 1:
+            cls_tokens = cls_tokens.view(B, C, self.embed_dim)
+            cls_final = cls_tokens.mean(dim=1)
+        else:
+            cls_final = cls_tokens
 
-            return cls_final
-
- 
+        return cls_final
 
 class Model(nn.Module):
     def __init__(self, config):
@@ -306,8 +360,9 @@ class Model(nn.Module):
         self.seq_len = config.seq_len
         self.num_class = config.num_class
         self.embed_dim = config.d_model
-        self.temperature = getattr(config, "temperature", 0.2)
-        self.gamma = getattr(config, "gamma", 0.999)
+        self.temperature = getattr(config, "temperature", 1)
+        self.gamma_u = 0.9
+        self.gamma_d = getattr(config, "gamma", 0.999)
         self.k = getattr(config, "k", 5)
         self.n_prototypes_total = min(self.k * self.num_class, 200) 
         self.feature_extractor=MonaFeatureExtractor(self.enc_in,self.embed_dim)
@@ -315,19 +370,32 @@ class Model(nn.Module):
 
         # New: Scalable loss config
         self.use_scalenorm = getattr(config, "use_scalenorm", False)
-        self.scalable_alpha = getattr(config, "scalable_alpha", 1.0)
-        self.scalable_gamma = getattr(config, "scalable_gamma", 2.0)
 
         # Backbone
         self.backbone =TransformerBackbone(config)
 
         # Prototypes
-        self.prototypes = nn.Parameter(torch.randn(self.n_prototypes_total, self.embed_dim))
-        nn.init.trunc_normal_(self.prototypes, std=0.02)
-        self.relu=nn.ReLU()
+        # 初始化方向（单位向量）
+        directions = F.normalize(torch.randn(self.n_prototypes_total, self.embed_dim), dim=-1)
+        # 初始化幅值（例如 0.5）
+        magnitudes = torch.randn(self.n_prototypes_total, 1) * 0.2 + 1.0  # N(mean, std²)
+        magnitudes = torch.clamp(magnitudes, min=1e-6)
+        prototypes = directions * magnitudes
+        self.prototypes = nn.Parameter(prototypes, requires_grad=False)
 
-        self.optimizing_prototypes = True
-        self.classifier=ScoreAggregation(self.n_prototypes_total,self.num_class)
+
+        self.relu=nn.ReLU()
+        self.dB=1
+
+        self.optimizing_prototypes = config.optimizing_prototypes
+        if(config.optimizing_prototypes ):
+            self.classifier=ScoreAggregation(self.n_prototypes_total,self.num_class)
+        else:
+            self.classifier=nn.Linear(self.embed_dim,self.num_class)
+
+
+
+
 
     def forward(
         self,
@@ -352,39 +420,68 @@ class Model(nn.Module):
         if scaled_x.shape[1] != self.backbone.enc_in:
             x = scaled_x.transpose(1, 2)  # to [B, C, L]
         
-        features = self.backbone(x)  # [B, D]
-        features = F.normalize(features, p=2, dim=-1)
-        prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
+        features = self.backbone(x,self.prototypes)  # [B, D]
+        if( self.optimizing_prototypes) :
+            feature = F.normalize(features, p=2, dim=-1)
+            prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
+            logits = torch.mm(feature, prototypes_norm.t())  # [B, K]
 
-        logits = torch.mm(features, prototypes_norm.t())  # [B, K]
+            if self.training and self.optimizing_prototypes and labels is not None:
+                # 注意：labels 在 forward 中是 Optional[Tensor]
+                # 确保 labels 是 [B] 形状
+                label_tensor = labels.long().squeeze(-1)  # [B]
+                self._update_prototypes(features,label_tensor)
+            class_logits = self.classifier(logits)  # [B, num_class]
+            return class_logits
+        else:
+            return self.classifier(features)
 
-        if self.training and self.optimizing_prototypes and labels is not None:
-            # 注意：labels 在 forward 中是 Optional[Tensor]
-            # 确保 labels 是 [B] 形状
-            label_tensor = labels.long().squeeze(-1)  # [B]
-            self._update_prototypes(features, label_tensor)
-        class_logits = self.classifier(logits)  # [B, num_class]
-        return class_logits
 
     @torch.no_grad()
-    def _update_prototypes(self, features: torch.Tensor, labels: torch.Tensor):
-        device = features.device
-        labels = labels.to(device)
+    def _update_prototypes(self, features, labels, eps=1e-6):
         B, D = features.shape
-        k = self.k
-        one_hot = F.one_hot(labels, num_classes=self.num_class).float()  # [B, C]
-        rep = repeat(one_hot, 'b c -> b (c k)', k=k)  # [B, K]
-        numerator = rep.t() @ features  # [K, D]
-        counts = rep.sum(dim=0)         # [K]
-        mask = counts > 0
-        counts_masked = counts[mask].unsqueeze(1)  # [k_pos,1]
-        new_protos = torch.zeros_like(self.prototypes, device=device)  # [K, D]
-        new_protos[mask] = numerator[mask] / counts_masked
-        # EMA update only for masked positions:
-        old = self.prototypes.data.clone()
-        updated = old
-        updated[mask] = self.gamma * old[mask] + (1.0 - self.gamma) * new_protos[mask]
-        self.prototypes.data = F.normalize(updated, p=2, dim=-1)
+        # gamma = 0.999 - (0.999 - 0.99) * math.exp(-self.dB / 40)
+        gamma=0.999
+        self.dB+=1
+
+        # 归一化方向
+        features_dir = F.normalize(features, dim=-1)
+        proto_dir = F.normalize(self.prototypes.data, dim=-1)
+
+        # 获取每个样本的真实类别
+        labels = labels.long().view(-1)  # [B]
+
+        # 初始化新原型
+        proto_new = torch.zeros_like(self.prototypes.data)
+
+        for c in range(self.num_class):
+            # 找出属于类别 c 的样本
+            mask = (labels == c)
+            if mask.sum() == 0:
+                proto_new[c * self.k : (c+1) * self.k] = self.prototypes.data[c * self.k : (c+1) * self.k]
+                continue
+
+            # 这些样本只与类别 c 的原型交互
+            feat_subset = features_dir[mask]  # [N_c, D]
+            proto_subset_dir = proto_dir[c * self.k : (c+1) * self.k]  # [k, D]
+
+            # 计算分配权重 Q: [N_c, k]
+            
+            Q = torch.softmax(feat_subset @ proto_subset_dir.t(), dim=1)  # 可加温度
+
+            # 用原始 features（非归一化）更新
+            feat_raw_subset = features[mask]  # [N_c, D]
+            # 计算每个原型的总接收权重（列和）
+            weight_sum = Q.sum(dim=0, keepdim=True)  # [1, k]
+
+            # 加权平均：避免幅值放大
+            proto_updated = (Q.t() @ feat_raw_subset) / (weight_sum.t() + 1e-8)  # [k, D]
+
+            proto_new[c * self.k : (c+1) * self.k] = proto_updated
+
+        # EMA update
+        self.prototypes.data.copy_(gamma * self.prototypes.data + (1 - gamma) * proto_new)
+
 
 
     def diversity_loss(self):

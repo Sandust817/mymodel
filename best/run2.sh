@@ -6,11 +6,11 @@ python -u run.py \
   --task_name classification \
   --is_training 0 \
   --root_path /root/data/UEA/EthanolConcentration/ \
-  --ckpt_path /root/sxh/mymodel2/mymodel/checkpoints/classification_EthanolConcentration_TimePNP_UEA_ftM_sl1751_ll48_pl0_dm128_nh8_el3_dl1_df256_expand2_dc4_fc1_ebtimeF_dtTrue_Exp_0/checkpoint.pth \
+  --ckpt_path /root/sxh/mymodel2/mymodel/checkpoints/classification_EthanolConcentration_TimePNP_UEA_ftM_sl1751_ll48_pl0_dm128_nh8_el2_dl1_df256_expand2_dc4_fc1_ebtimeF_dtTrue_Exp_0/checkpoint.pth \
   --model_id EthanolConcentration \
   --model TimePNP \
   --data UEA \
-  --e_layers 3 \
+  --e_layers 2 \
   --batch_size 32 \
   --dropout 0.2 \
   --d_model 128 \

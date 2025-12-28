@@ -309,232 +309,105 @@ class Model(nn.Module):
         self.dB=1
 
         # 原型参数初始化
-        self.k_levels = getattr(config, "k_levels",[2,3])  # 从config读取不定长数组，也可直接赋值如 [2,3]
-        self.counts = [self.num_class * k for k in self.k_levels]  
-        self.weights=[0.1,0.25]
-
-        # 2. 动态生成对应层数的原型参数（核心优化：适配不定长k_levels）
-        self.prototype_layers = nn.ParameterList()  # 使用nn.ParameterList管理多个原型层
-        for count in self.counts:
-            # 按count数量初始化原型，保持原有参数配置（randn、requires_grad=False）
-            prototype = nn.Parameter(
-                torch.randn(count, self.embed_dim),
-                requires_grad=False
-            )
-            self.prototype_layers.append(prototype)
+        directions = F.normalize(torch.randn(self.n_prototypes_total, self.embed_dim), dim=-1)
+        magnitudes = torch.randn(self.n_prototypes_total, 1) * 0.2 + 1.0
+        self.prototypes = nn.Parameter(directions * magnitudes, requires_grad=False)
 
         if self.optimizing_prototypes:
             self.classifier = ScoreAggregation(self.n_prototypes_total, self.num_class)
             # 初始化集成 Loss 模块
-            # self.criterion = IntegratedPrototypeLoss(
-            #     self.n_prototypes_total, 
-            #     self.num_class, 
-            #     alpha=getattr(config, "proto_alpha", 0.5),
-            #     beta=getattr(config, "proto_beta", 0.1)
-            # )
+            self.criterion = IntegratedPrototypeLoss(
+                self.n_prototypes_total, 
+                self.num_class, 
+                alpha=getattr(config, "proto_alpha", 0.5),
+                beta=getattr(config, "proto_beta", 0.1)
+            )
         else:
             self.classifier = nn.Linear(self.embed_dim, self.num_class)
 
-    def forward(self, x, _, labels, _a):
+    def forward(self, x,_, labels,_a):
         """
-        前向传播：
-        - 训练模式：返回 (最终分类响应, 总损失)
-        - 测试模式：仅返回 最终分类响应
-        无字典返回，直接返回计算好的损失
+        返回: 
+        如果 training: 返回 (aggregated_logits, prototype_logits) 
+        如果 eval: 只返回 aggregated_logits
         """
-        # 1. 特征提取
-        x = self.feature_extractor(x.transpose(1, 2))
-        top_prototypes = self.prototype_layers[-1]
-        features = self.backbone(x, top_prototypes)  # [B, D]
+        x1 = self.feature_extractor(x.transpose(1, 2))
+        x = x1
+        features = self.backbone(x, self.prototypes) # [B, D]
 
-        # 2. 多阶段推理：获取所有层级的logits和响应
-        stage_logits = []
-        stage_responses = []
-        for layer_idx in range(len(self.prototype_layers)):
-            cur_prototypes = self.prototype_layers[layer_idx]
-            cur_k = self.k_levels[layer_idx]
-            cur_logits, cur_resp = self._get_stage_logits(features, cur_prototypes, cur_k)
-            stage_logits.append(cur_logits)
-            stage_responses.append(cur_resp)
-        top_response=stage_responses[-1]
-        # 3. 训练模式：计算总损失 + 更新原型
-        if self.training and labels is not None:
-            targets = labels.long().squeeze(-1)
-            self._update_all_hierarchy(features, targets)
+        if self.optimizing_prototypes:
+            # 计算余弦相似度得分 (Prototype Logits)
+            features_norm = F.normalize(features, p=2, dim=-1)
+            prototypes_norm = F.normalize(self.prototypes, p=2, dim=-1)
+            proto_logits = torch.mm(features_norm, prototypes_norm.t()) # [B, K]
 
+            # 聚合得分 (Aggregated Logits)
+            class_logits = self.classifier(proto_logits)
 
-            # 返回：(最终分类响应, 总损失) （无字典，直接返回计算好的loss）
-            top_response = stage_responses[-1]
-            return top_response, self.get_loss(stage_responses,stage_logits,targets)
-        return top_response
+            if self.training and labels is not None:
+                self._update_prototypes(features, labels.long().squeeze(-1))
+                # 训练模式下返回所有必要信息用于计算 Loss
+                return class_logits, proto_logits
+            
+            return class_logits
+        else:
+            return self.classifier(features)
 
-    def get_loss(self, stage_responses,stage_logits, targets):
-
-        total_loss =0  # 初始化总损失
-
-        # 逐层级计算损失 + 加权求和（类似 weights[0]*loss1 + weights[1]*loss2 + ...）
-        for layer_idx in range(len(self.prototype_layers)):
-            cur_weight = self.weights[layer_idx]
-            cur_logits = stage_logits[layer_idx]
-            cur_resp = stage_responses[layer_idx]
-            # 计算当前层级损失（调用损失函数）
-            criterion = nn.CrossEntropyLoss()
-            cur_loss = criterion(cur_resp,  targets)
-            # 加权累加总损失
-            total_loss += cur_weight * cur_loss
-
-        # 更新所有层级原型
-
-        return total_loss
-
-    def _get_stage_logits(self, features, prototypes, k_per_class):
+    def get_loss(self, forward_output, targets):
         """
-        计算特征与原型的相似度，并按类别分组聚合
+        在训练脚本中调用: 
+        output = model(x, labels)
+        loss = model.get_loss(output, labels)
         """
-        # 归一化计算余弦相似度
-        feat_norm = F.normalize(features, p=2, dim=-1)
-        proto_norm = F.normalize(prototypes, p=2, dim=-1)
-        logits = torch.mm(feat_norm, proto_norm.t()) / self.temperature # [B, num_class * k]
-        
-        # 模拟“筛选”过程：LogSumExp 聚合到类级别
-        B = logits.shape[0]
-        grouped_logits = logits.view(B, self.num_class, k_per_class)
-        # 使用 LogSumExp 代表该类在该阶段的综合响应
-        class_response = torch.logsumexp(grouped_logits, dim=-1) # [B, num_class]
-        
-        return logits, class_response
+        if isinstance(forward_output, tuple):
+            aggregated_logits, prototype_logits = forward_output
+            return self.criterion(aggregated_logits, prototype_logits, self.prototypes, targets)
+        else:
+            # 基础分类损失
+            return F.cross_entropy(forward_output, targets)
 
+    # ... _update_prototypes 函数保持不变 ...
     @torch.no_grad()
-    def _update_prototypes(self, prototypes, features, labels, k, gamma):
-        """
-        单一层级原型的纯特征驱动更新（无层级约束，底层原型专用/上层原型自身更新值计算）
-        参数：
-            prototypes: 当前层原型 [count, D]
-            features: 输入特征 [B, D]
-            labels: 样本标签 [B]
-            k: 当前层每个类的原型数
-            gamma: EMA更新系数
-        返回：
-            proto_new: 当前层仅由特征计算的新原型 [count, D]
-            proto_class_centers: 当前层原型的类内均值 [num_class, D]（用于约束上层）
-        """
+    def _update_prototypes(self, features, labels, eps=1e-6):
         B, D = features.shape
-        # 归一化方向（保持你原始逻辑）
+        gamma = 0.9 + (0.999 - 0.9) * math.exp(-self.dB / 100)
+        # gamma=0.999
+        self.dB+=1
+
+        # 归一化方向 
         features_dir = F.normalize(features, dim=-1)
-        proto_dir = F.normalize(prototypes.data, dim=-1)
+        proto_dir = F.normalize(self.prototypes.data, dim=-1)
+
+        # 获取每个样本的真实类别
         labels = labels.long().view(-1)  # [B]
 
         # 初始化新原型
-        proto_new = torch.zeros_like(prototypes.data)
+        proto_new = torch.zeros_like(self.prototypes.data)
 
         for c in range(self.num_class):
-            # 找出类别c的样本
+            # 找出属于类别 c 的样本
             mask = (labels == c)
             if mask.sum() == 0:
-                # 无样本时保持原原型
-                proto_new[c * k : (c+1) * k] = prototypes.data[c * k : (c+1) * k]
+                proto_new[c * self.k : (c+1) * self.k] = self.prototypes.data[c * self.k : (c+1) * self.k]
                 continue
 
-            # 类别c的样本和原型子集
+            # 这些样本只与类别 c 的原型交互
             feat_subset = features_dir[mask]  # [N_c, D]
-            proto_subset_dir = proto_dir[c * k : (c+1) * k]  # [k, D]
-            feat_raw_subset = features[mask]  # [N_c, D]（原始特征，非归一化）
+            proto_subset_dir = proto_dir[c * self.k : (c+1) * self.k]  # [k, D]
 
-            # 计算分配权重Q（保持你原始逻辑）
-            Q = torch.softmax(feat_subset @ proto_subset_dir.t(), dim=1)  # [N_c, k]
+            # 计算分配权重 Q: [N_c, k]
+            
+            Q = torch.softmax(feat_subset @ proto_subset_dir.t(), dim=1)  # 可加温度
+
+            # 用原始 features（非归一化）更新
+            feat_raw_subset = features[mask]  # [N_c, D]
+            # 计算每个原型的总接收权重（列和）
             weight_sum = Q.sum(dim=0, keepdim=True)  # [1, k]
 
-            # 加权平均更新（避免幅值放大，保持你原始逻辑）
+            # 加权平均：避免幅值放大
             proto_updated = (Q.t() @ feat_raw_subset) / (weight_sum.t() + 1e-8)  # [k, D]
-            proto_new[c * k : (c+1) * k] = proto_updated
 
-        # 计算当前层原型的类内均值（每个类对应k个原型的均值，用于约束上层）
-        proto_class_centers = prototypes.data.view(self.num_class, k, D).mean(dim=1)  # [num_class, D]
+            proto_new[c * self.k : (c+1) * self.k] = proto_updated
 
-        return proto_new, proto_class_centers
-
-    def _get_warmup_gamma(self, current_step, warm_up_steps=3, active_steps=10):
-        """
-        current_step: 这里的 self.dB
-        warm_up_steps: 前期冻结步数
-        active_steps: 中期允许快速演化的步数
-        """
-        if current_step < warm_up_steps:
-            # 第一阶段：高 Gamma (1.0)，原型不动，作为稳定锚点
-            return 1.0
-        
-        elif current_step < (warm_up_steps + active_steps):
-            # 第二阶段：降低 Gamma，允许原型向特征中心靠拢
-            # 采用余弦或线性插值从 1.0 降到 0.95
-            progress = (current_step - warm_up_steps) / active_steps
-            return 1.0 - (1.0 - 0.99) * progress 
-        
-        else:
-            # 第三阶段：再次升高并锁定
-            # 从 0.95 缓慢升至 0.999
-            return 0.99 + (0.999 - 0.99) * (1.0 - math.exp(-(current_step - warm_up_steps - active_steps) / 10))
-
-
-    @torch.no_grad()
-    def _update_all_hierarchy(self, features, labels,update_alpha=0.5):
-        """
-        层级依赖式原型更新：
-        1.  先更新最底层（第0层）：仅由原始特征驱动，无上层约束
-        2.  再更新上层（第1层→最后一层）：新原型 = alpha*自身特征更新值 + (1-alpha)*底层原型约束值
-        3.  所有层级最终执行EMA平滑更新
-        """
-        # 1. 计算EMA更新系数（保持你原始逻辑）
-
-        gamma = self._get_warmup_gamma(self.dB)
-        self.dB += 1
-        # if self.dB < 10:
-        #     continue
-        # 存储每层原型的类内均值（用于约束上一层）
-        layer_class_centers = []
-        num_layers = len(self.prototype_layers)
-
-        # 2. 先更新最底层（第0层）：纯特征驱动，无层级约束
-        bottom_layer_idx = 0
-        bottom_prototypes = self.prototype_layers[bottom_layer_idx]
-        bottom_k = self.k_levels[bottom_layer_idx]
-        # 计算底层纯特征驱动的新原型 + 类内均值
-        bottom_proto_new_feat, bottom_proto_centers = self._update_prototypes(
-            bottom_prototypes, features, labels, bottom_k, gamma
-        )
-        # 底层执行EMA更新（无混合，直接用特征更新值）
-        bottom_prototypes.data.copy_(
-            gamma * bottom_prototypes.data + (1 - gamma) * bottom_proto_new_feat
-        )
-        # 存储底层类内均值，用于约束第1层
-        layer_class_centers.append(bottom_proto_centers)
-
-        # 3. 迭代更新上层（第1层 → 最后一层）：层级依赖混合更新
-        for layer_idx in range(1, num_layers):
-            # 当前层核心参数
-            cur_prototypes = self.prototype_layers[layer_idx]
-            cur_k = self.k_levels[layer_idx]
-            cur_count = self.counts[layer_idx]
-
-            # 底层参数（上一层，即layer_idx-1层）
-            prev_layer_centers = layer_class_centers[layer_idx - 1]  # [num_class, D]（上一层类内均值）
-
-            # 步骤1：计算当前层自身的特征驱动更新值（纯特征更新，无约束）
-            cur_proto_new_feat, cur_proto_centers = self._update_prototypes(
-                cur_prototypes, features, labels, cur_k, gamma
-            )
-
-            # 步骤2：计算底层原型对当前层的约束值（将上一层类内均值扩展为当前层原型维度）
-            # 上一层每个类的均值 → 扩展为当前层每个类的k个原型（与当前层原型结构匹配）
-            prev_layer_constraint = prev_layer_centers.repeat_interleave(cur_k, dim=0)  # [cur_count, D]
-
-            # 步骤3：混合更新值 = alpha*自身特征更新值 + (1-alpha)*底层约束值
-            cur_proto_new_combined = update_alpha * cur_proto_new_feat + \
-                                     (1 - update_alpha) * prev_layer_constraint
-
-            # 步骤4：当前层执行EMA平滑更新
-            cur_prototypes.data.copy_(
-                gamma * cur_prototypes.data + (1 - gamma) * cur_proto_new_combined
-            )
-
-            # 步骤5：存储当前层类内均值，用于约束下一层（若存在）
-            layer_class_centers.append(cur_proto_centers)
+        # EMA update
+        self.prototypes.data.copy_(gamma * self.prototypes.data + (1 - gamma) * proto_new)

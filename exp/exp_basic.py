@@ -3,13 +3,14 @@ import torch
 from models import Autoformer, Transformer, TimesNet, Nonstationary_Transformer, DLinear, FEDformer, \
     Informer, LightTS, Reformer, ETSformer, Pyraformer, PatchTST, MICN, Crossformer, FiLM, iTransformer, \
     Koopa, TiDE, FreTS, TimeMixer, TSMixer, SegRNN, MambaSimple, TemporalFusionTransformer, SCINet, PAttn, TimeXer, \
-    WPMixer, MultiPatchFormer, St_mem,TimeDART,cmodel,TimePNP,TimeMIL
+    WPMixer, MultiPatchFormer, St_mem,TimeDART,cmodel,TimePNP,TimeMIL,SoftShape
 
 
 class Exp_Basic(object):
     def __init__(self, args):
         self.args = args
         self.model_dict = {
+            'SoftShape': SoftShape,
             'TimesNet': TimesNet,
             'Autoformer': Autoformer,
             'Transformer': Transformer,
