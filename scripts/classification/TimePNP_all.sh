@@ -11,8 +11,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -29,15 +29,15 @@ python -u run.py \
   --model_id AtrialFibrillation \
   --model $model_name \
   --data UEA \
-  --e_layers 2 \
+  --e_layers 1 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.0001 \
+  --learning_rate 0.001 \
   --train_epochs 150 \
   --patience 30
 
@@ -51,8 +51,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -70,8 +70,8 @@ python -u run.py \
 #   --model $model_name \
 #   --data UEA \
 #   --e_layers 2 \
-#   --batch_size 32 \
-#   --d_model 32 \
+#   --batch_size 16 \
+#   --d_model 64 \
 #   --d_ff 256 \
 #   --top_k 3 \
 #   --des 'Exp' \
@@ -89,8 +89,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -109,8 +109,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -130,7 +130,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 16 \
-  --d_model 32 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -149,8 +149,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -170,7 +170,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 32 \
+  --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -189,8 +189,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -209,8 +209,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -229,8 +229,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -250,7 +250,7 @@ python -u run.py \
   --e_layers 2 \
   --dropout 0.2 \
   --batch_size 32 \
-  --d_model 32 \
+  --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -269,8 +269,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -289,8 +289,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 256 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -315,7 +315,7 @@ python -u run.py \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.0005 \
+  --learning_rate 0.001 \
   --train_epochs 150 \
   --patience 30
 
@@ -329,8 +329,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -349,8 +349,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -369,8 +369,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -389,8 +389,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -409,8 +409,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -429,8 +429,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -449,8 +449,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -469,13 +469,13 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 64 \
+  --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.0005 \
+  --learning_rate 0.001 \
   --train_epochs 150 \
   --patience 30
 
@@ -489,8 +489,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -509,8 +509,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -529,8 +529,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -549,8 +549,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -569,8 +569,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 64 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
@@ -589,8 +589,8 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --dropout 0.2 \
-  --batch_size 32 \
-  --d_model 32 \
+  --batch_size 16 \
+  --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \

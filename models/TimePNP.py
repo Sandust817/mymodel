@@ -183,8 +183,8 @@ class PrototypeBlock(nn.Module):
 class TransformerBackbone(nn.Module):
     def __init__(self, config: Dict[str, Any]):
         super().__init__()
-        self.enc_in = config.d_model
-        self.seq_len = config.seq_len
+        self.enc_in = config.enc_in
+        self.seq_len = config.seq_len if config.seq_len>21 else 21
         self.embed_dim = config.d_model
         self.num_heads = config.n_heads
         self.num_layers = config.e_layers
@@ -198,7 +198,7 @@ class TransformerBackbone(nn.Module):
         self.use_fft_weight = getattr(config, "use_fft_weight", True)
         self.fft_weight_type = getattr(config, "fft_weight_type", "learnable")
         if self.use_fft_weight:
-            self.fft_weight = FFTFrequencyWeight(self.seq_len, self.fft_weight_type)
+            self.fft_weight = FFTFrequencyWeight(config.seq_len, self.fft_weight_type)
 
         # Patching
         if self.use_patch == 1:
@@ -213,13 +213,14 @@ class TransformerBackbone(nn.Module):
             )
             transformer_seq_len = self.patch_embed.n_patches
         else:
-            self.input_proj = nn.Linear(self.enc_in, self.embed_dim)
+            # self.input_proj = nn.Linear(self.enc_in, self.embed_dim)
+            self.input_proj = MonaFeatureExtractor(self.enc_in,self.embed_dim)
             transformer_seq_len = self.seq_len
 
         # Positional encoding
         self.use_pos_encoding = True
         if self.use_pos_encoding:
-            self.pos_encoding = nn.Parameter(torch.zeros(1, transformer_seq_len, self.embed_dim))
+            self.pos_encoding = nn.Parameter(torch.zeros(1, self.seq_len, self.embed_dim))
             nn.init.normal_(self.pos_encoding, std=0.02)
 
         # [CLS] token
@@ -253,7 +254,8 @@ class TransformerBackbone(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
-    def forward(self, x: torch.Tensor, prototypes: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.transpose(1, 2)
         B, C, L = x.shape
         if self.use_fft_weight:
             x = self.fft_weight(x)
@@ -262,9 +264,8 @@ class TransformerBackbone(nn.Module):
         if self.use_patch != 0:
             x = self.patch_embed(x)
         else:
-            x = x.transpose(1, 2)
             x = self.input_proj(x)
-
+        x=x.transpose(1,2)
         if self.use_pos_encoding:
             x = x + self.pos_encoding
 
@@ -274,11 +275,11 @@ class TransformerBackbone(nn.Module):
 
         # Transformer encoder
         x = self.transformer(x)
-        x = self.norm(x)
+        # x = self.norm(x)
 
         # # ✅ Cross-attention with prototypes
-        if(self.proto):
-            x = self.proto_attn(x)
+        # if(self.proto):
+        #     x = self.proto_attn(x)
             # x = self.proto_attn(x)
 
         # Extract CLS and aggregate
@@ -343,9 +344,13 @@ class Model(nn.Module):
         无字典返回，直接返回计算好的损失
         """
         # 1. 特征提取
-        x = self.feature_extractor(x.transpose(1, 2))
-        top_prototypes = self.prototype_layers[-1]
-        features = self.backbone(x, top_prototypes)  # [B, D]
+        # x = self.feature_extractor(x.transpose(1, 2))
+        means = x.mean(1, keepdim=True).detach()
+        x = x - means
+        stdev = torch.sqrt(
+            torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x /= stdev
+        features = self.backbone(x)  # [B, D]
 
         # 2. 多阶段推理：获取所有层级的logits和响应
         stage_logits = []

@@ -162,32 +162,32 @@ class DataEmbedding_wo_pos(nn.Module):
         return self.dropout(x)
 
 
-# class PatchEmbedding(nn.Module):
-#     def __init__(self, d_model, patch_len, stride, padding, dropout):
-#         super(PatchEmbedding, self).__init__()
-#         # Patching
-#         self.patch_len = patch_len
-#         self.stride = stride
-#         self.padding_patch_layer = nn.ReplicationPad1d((0, padding))
+class PatchEmbedding(nn.Module):
+    def __init__(self, d_model, patch_len, stride, padding, dropout):
+        super(PatchEmbedding, self).__init__()
+        # Patching
+        self.patch_len = patch_len
+        self.stride = stride
+        self.padding_patch_layer = nn.ReplicationPad1d((0, padding))
 
-#         # Backbone, Input encoding: projection of feature vectors onto a d-dim vector space
-#         self.value_embedding = nn.Linear(patch_len, d_model, bias=False)
+        # Backbone, Input encoding: projection of feature vectors onto a d-dim vector space
+        self.value_embedding = nn.Linear(patch_len, d_model, bias=False)
 
-#         # Positional embedding
-#         self.position_embedding = PositionalEmbedding(d_model)
+        # Positional embedding
+        self.position_embedding = PositionalEmbedding(d_model)
 
-#         # Residual dropout
-#         self.dropout = nn.Dropout(dropout)
+        # Residual dropout
+        self.dropout = nn.Dropout(dropout)
 
-#     def forward(self, x):
-#         # do patching
-#         n_vars = x.shape[1]
-#         x = self.padding_patch_layer(x)
-#         x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride)
-#         x = torch.reshape(x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3]))
-#         # Input encoding
-#         x = self.value_embedding(x) + self.position_embedding(x)
-#         return self.dropout(x), n_vars
+    def forward(self, x):
+        # do patching
+        n_vars = x.shape[1]
+        x = self.padding_patch_layer(x)
+        x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride)
+        x = torch.reshape(x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3]))
+        # Input encoding
+        x = self.value_embedding(x) + self.position_embedding(x)
+        return self.dropout(x), n_vars
 
 import torch
 import torch.nn as nn
@@ -431,22 +431,22 @@ class Patch(nn.Module):
         return x
 
 
-class PatchEmbedding(nn.Module):
-    def __init__(
-        self,
-        patch_len: int,
-        d_model: int,
-    ):
-        super(PatchEmbedding, self).__init__()
-        self.patch_embedding = nn.Linear(patch_len, d_model, bias=True)
+# class PatchEmbedding(nn.Module):
+#     def __init__(
+#         self,
+#         patch_len: int,
+#         d_model: int,
+#     ):
+#         super(PatchEmbedding, self).__init__()
+#         self.patch_embedding = nn.Linear(patch_len, d_model, bias=True)
 
-    def forward(self, x):
-        """
-        :param x: [batch_size * num_features, seq_len, patch_len]
-        :return: [batch_size * num_features, seq_len, d_model]
-        """
-        x = self.patch_embedding(x)
-        return x
+#     def forward(self, x):
+#         """
+#         :param x: [batch_size * num_features, seq_len, patch_len]
+#         :return: [batch_size * num_features, seq_len, d_model]
+#         """
+#         x = self.patch_embedding(x)
+#         return x
 
 
 class TokenEmbedding_TimeDART(nn.Module):

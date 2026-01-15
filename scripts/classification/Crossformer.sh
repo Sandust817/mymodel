@@ -1,11 +1,11 @@
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=0
 
 model_name=Crossformer
 
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/EthanolConcentration/ \
+  --root_path /root/data/UEA/EthanolConcentration/ \
   --model_id EthanolConcentration \
   --model $model_name \
   --data UEA \
@@ -23,7 +23,7 @@ python -u run.py \
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/FaceDetection/ \
+  --root_path /root/data/UEA/FaceDetection/ \
   --model_id FaceDetection \
   --model $model_name \
   --data UEA \
@@ -41,7 +41,7 @@ python -u run.py \
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/Handwriting/ \
+  --root_path /root/data/UEA/Handwriting/ \
   --model_id Handwriting \
   --model $model_name \
   --data UEA \
@@ -59,7 +59,7 @@ python -u run.py \
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/Heartbeat/ \
+  --root_path /root/data/UEA/Heartbeat/ \
   --model_id Heartbeat \
   --model $model_name \
   --data UEA \
@@ -77,7 +77,7 @@ python -u run.py \
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/JapaneseVowels/ \
+  --root_path /root/data/UEA/JapaneseVowels/ \
   --model_id JapaneseVowels \
   --model $model_name \
   --data UEA \
@@ -95,7 +95,7 @@ python -u run.py \
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/PEMS-SF/ \
+  --root_path /root/data/UEA/PEMS-SF/ \
   --model_id PEMS-SF \
   --model $model_name \
   --data UEA \
@@ -113,7 +113,7 @@ python -u run.py \
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/SelfRegulationSCP1/ \
+  --root_path /root/data/UEA/SelfRegulationSCP1/ \
   --model_id SelfRegulationSCP1 \
   --model $model_name \
   --data UEA \
@@ -131,7 +131,7 @@ python -u run.py \
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/SelfRegulationSCP2/ \
+  --root_path /root/data/UEA/SelfRegulationSCP2/ \
   --model_id SelfRegulationSCP2 \
   --model $model_name \
   --data UEA \
@@ -149,7 +149,7 @@ python -u run.py \
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/SpokenArabicDigits/ \
+  --root_path /root/data/UEA/SpokenArabicDigits/ \
   --model_id SpokenArabicDigits \
   --model $model_name \
   --data UEA \
@@ -167,7 +167,7 @@ python -u run.py \
 python -u run.py \
   --task_name classification \
   --is_training 1 \
-  --root_path ./dataset/UWaveGestureLibrary/ \
+  --root_path /root/data/UEA/UWaveGestureLibrary/ \
   --model_id UWaveGestureLibrary \
   --model $model_name \
   --data UEA \

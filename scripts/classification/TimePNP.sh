@@ -11,15 +11,14 @@ python -u run.py \
   --data UEA \
   --e_layers 2 \
   --batch_size 32 \
-  --dropout 0.2 \
-  --d_model 256 \
+  --d_model 128 \
   --d_ff 256 \
   --top_k 3 \
   --des 'Exp' \
   --itr 1 \
-  --learning_rate 0.0005 \
+  --learning_rate 0.0001 \
   --train_epochs 200 \
-  --patience 30
+  --patience 20
 
 # python -u run.py \
 #   --task_name classification \

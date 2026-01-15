@@ -3,8 +3,7 @@ export CUDA_VISIBLE_DEVICES=0
 
 # 核心参数定义
 model_name="TimeMIL"
-TZ='Asia/Shanghai'
-exp_id=$(date '+%Y%m%d%H')
+
 
 # 2. 批量执行训练
 datasets=(
@@ -26,7 +25,7 @@ for dataset in "${datasets[@]}"; do
       --d_model 128 \
       --d_ff 256 \
       --top_k 3 \
-      --des "Exp_${exp_id}" \
+      --des "Exp" \
       --itr 1 \
       --learning_rate 0.001 \
       --train_epochs 100 \

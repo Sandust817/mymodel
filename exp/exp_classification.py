@@ -21,6 +21,45 @@ from sklearn.metrics.pairwise import cosine_similarity
 import seaborn as sns
 import numpy as np
 import os
+def plot_seq_feature(seq_data, save_path, figsize=(8, 4), dpi=300):
+    """
+    绘制序列特征2维图（横轴：序列长度，纵轴：特征值）
+    Args:
+        seq_data: (L,) 一维张量/数组，对应单个样本的特征序列（每个时间步一个值）
+        save_path: 图片保存路径（含文件名，如 "./figs/seq_feature.png"）
+        figsize: 图片尺寸
+        dpi: 分辨率（论文常用300dpi）
+    """
+    # 转换为numpy数组（兼容torch张量）
+    if torch.is_tensor(seq_data):
+        seq_data = seq_data.cpu().detach().numpy()
+    L = len(seq_data)
+    x_axis = np.arange(L)  # 横轴：序列长度索引（0到L-1）
+
+    # 创建画布，按论文要求设置样式
+    # plt.rcParams['font.family'] = 'Times New Roman'  # 论文常用字体
+    plt.rcParams['font.size'] = 12  # 字体大小
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+
+    # 绘制2维曲线（横轴：长度，纵轴：特征值）
+    ax.plot(x_axis, seq_data, color='#2E86AB', linewidth=2)
+    # 设置坐标轴标签
+    ax.set_xlabel('Length (L)', fontweight='bold')
+    ax.set_ylabel('Value (v)', fontweight='bold')
+    # 设置坐标轴范围
+    ax.set_xlim(0, L-1)
+    ax.set_ylim(np.min(seq_data) - 0.1 * np.abs(np.min(seq_data)), 
+                np.max(seq_data) + 0.1 * np.abs(np.max(seq_data)))
+    # 添加网格（便于论文阅读）
+    ax.grid(True, alpha=0.3, linestyle='--')
+    # 添加图例
+    ax.legend(loc='best')
+    # 紧凑布局，避免标签被截断
+    plt.tight_layout()
+    # 保存图片（论文常用png格式，可改为eps矢量图）
+    plt.savefig(save_path, bbox_inches='tight')
+    plt.close(fig)  # 关闭画布，释放内存
+    print(f"序列特征图已保存至：{save_path}")
 
 @torch.no_grad()
 def visualize_prototypes(model, setting, class_names=None):
@@ -279,7 +318,7 @@ class Exp_Classification(Exp_Basic):
                 label = label.to(self.device)
                 if(self.args.model=="SoftShape"):
                     outputs,loss = self.model(batch_x, padding_mask, label,epoch)
-                    loss =0.001*loss+ criterion(outputs, label.long().squeeze(-1))
+                    loss =0.01*loss+ criterion(outputs, label.long().squeeze(-1))
                     outputs = self.model(batch_x, padding_mask, label,epoch)
                 elif(self.args.model=="TimePNP"):
                     outputs,loss = self.model(batch_x, padding_mask, label,epoch)
